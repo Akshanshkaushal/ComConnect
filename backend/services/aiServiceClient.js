@@ -48,4 +48,22 @@ const planTasks = (workspaceId, request, members) =>
     body: JSON.stringify({ request, members }),
   });
 
-module.exports = { indexWorkspace, askWorkspace, planTasks };
+const coordinateEvent = (workspaceId, question, members) =>
+  requestAiService(`/v1/workspaces/${workspaceId}/event-coordinator`, {
+    method: "POST",
+    body: JSON.stringify({ question, members }),
+  });
+
+const summarizeChat = (chatName, messages) =>
+  requestAiService("/v1/chats/summary", {
+    method: "POST",
+    body: JSON.stringify({ chatName, messages }),
+  });
+
+module.exports = {
+  askWorkspace,
+  coordinateEvent,
+  indexWorkspace,
+  planTasks,
+  summarizeChat,
+};

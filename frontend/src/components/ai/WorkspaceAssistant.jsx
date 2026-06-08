@@ -36,8 +36,12 @@ const WorkspaceAssistant = ({ workspaceId, onTasksCreated }) => {
   const toast = useToast();
   const [question, setQuestion] = useState("");
   const [planningRequest, setPlanningRequest] = useState("");
+  const [coordinatorQuestion, setCoordinatorQuestion] = useState(
+    "Are we ready for the event? What is blocked?"
+  );
   const [answer, setAnswer] = useState(null);
   const [plan, setPlan] = useState(null);
+  const [coordinatorReport, setCoordinatorReport] = useState(null);
   const [approvalToken, setApprovalToken] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -107,6 +111,43 @@ const WorkspaceAssistant = ({ workspaceId, onTasksCreated }) => {
       }
     );
 
+  const askCoordinator = () =>
+    runRequest(async () => {
+      const { data } = await axios.post(
+        `${API_URL}/ai/workspaces/${workspaceId}/event-coordinator`,
+        { question: coordinatorQuestion },
+        config
+      );
+      setCoordinatorReport(data.report);
+    });
+
+  const renderReportList = (title, items) => (
+    <Box>
+      <Text fontSize="sm" color="gray.400" mb={2}>
+        {title}
+      </Text>
+      {items?.length ? (
+        <List spacing={2}>
+          {items.map((item, index) => (
+            <ListItem
+              key={`${title}-${index}`}
+              p={2}
+              border="1px solid #29445d"
+              borderRadius="6px"
+              fontSize="sm"
+            >
+              {item}
+            </ListItem>
+          ))}
+        </List>
+      ) : (
+        <Text fontSize="sm" color="gray.500">
+          None found
+        </Text>
+      )}
+    </Box>
+  );
+
   return (
     <>
       <Button
@@ -136,6 +177,7 @@ const WorkspaceAssistant = ({ workspaceId, onTasksCreated }) => {
               <TabList>
                 <Tab>Ask Workspace</Tab>
                 <Tab>Plan Tasks</Tab>
+                <Tab>Event Coordinator</Tab>
               </TabList>
               <TabPanels>
                 <TabPanel px={0}>
@@ -209,6 +251,50 @@ const WorkspaceAssistant = ({ workspaceId, onTasksCreated }) => {
                             </ListItem>
                           ))}
                         </List>
+                      </Box>
+                    )}
+                  </VStack>
+                </TabPanel>
+                <TabPanel px={0}>
+                  <VStack align="stretch" spacing={4}>
+                    <Textarea
+                      value={coordinatorQuestion}
+                      onChange={(event) =>
+                        setCoordinatorQuestion(event.target.value)
+                      }
+                      placeholder="Are we ready for the event?"
+                      bg="#162737"
+                      borderColor="#29445d"
+                    />
+                    <Button
+                      onClick={askCoordinator}
+                      isLoading={loading}
+                      isDisabled={!coordinatorQuestion.trim()}
+                      colorScheme="blue"
+                    >
+                      Analyze Event
+                    </Button>
+                    {coordinatorReport && (
+                      <Box display="flex" flexDirection="column" gap={4}>
+                        <Badge alignSelf="flex-start">
+                          {coordinatorReport.readiness}
+                        </Badge>
+                        <Text whiteSpace="pre-wrap">
+                          {coordinatorReport.answer}
+                        </Text>
+                        {renderReportList(
+                          "Blocked items",
+                          coordinatorReport.blocked_items
+                        )}
+                        {renderReportList(
+                          "Overloaded members",
+                          coordinatorReport.overloaded_members
+                        )}
+                        {renderReportList(
+                          "Follow-up tasks",
+                          coordinatorReport.follow_up_tasks
+                        )}
+                        {renderReportList("Risks", coordinatorReport.risks)}
                       </Box>
                     )}
                   </VStack>

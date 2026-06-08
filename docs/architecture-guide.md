@@ -2,7 +2,8 @@
 
 This guide explains how ComConnect works end to end: the frontend, backend,
 data stores, real-time chat, notifications, workspace task management, and the
-LangChain-powered workspace AI assistant.
+LangChain-powered workspace AI assistant, chat summarizer, and event
+coordinator agent.
 
 ## 1. System Overview
 
@@ -68,9 +69,9 @@ Key frontend responsibilities:
 
 - `WorkspaceSelection`: create, join, and navigate to workspaces.
 - `MyChats`: lists workspace chats and provides navigation to tasks, map, and
-  the AI assistant.
-- `SingleChat`: loads messages, sends messages, handles typing state, and opens
-  the manual task allocation dialog.
+  the AI assistant and event coordinator.
+- `SingleChat`: loads messages, sends messages, handles typing state, opens the
+  manual task allocation dialog, and shows `Summarize Chat` for group chats.
 - `WorkspaceAssistant`: modal with two modes:
   - Ask Workspace: sends a question to `/api/ai/workspaces/:id/ask`.
   - Plan Tasks: generates a proposed task plan and applies it only after user
@@ -103,8 +104,9 @@ Important backend modules:
   chat messages, and tasks.
 - `aiServiceClient.js`: calls the Flask service with the internal
   `X-Service-Token`.
-- `aiControllers.js`: owns workspace authorization, index refresh, AI ask flow,
-  task-plan generation, and task-plan approval.
+- `aiControllers.js`: owns workspace/chat authorization, index refresh, AI ask
+  flow, task-plan generation, task-plan approval, chat summaries, and event
+  coordinator reports.
 
 ## 5. Data Model
 

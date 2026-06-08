@@ -1,11 +1,15 @@
 const asyncHandler = require("express-async-handler");
 const jwt = require("jsonwebtoken");
 
+const Chat = require("../models/chatModel");
+const Message = require("../models/messageModel");
 const Task = require("../models/taskModel");
 const {
   askWorkspace,
+  coordinateEvent,
   indexWorkspace,
   planTasks,
+  summarizeChat,
 } = require("../services/aiServiceClient");
 const { getWorkspaceForMember } = require("../services/workspaceAccessService");
 const { buildWorkspaceDocuments } = require("../services/workspaceKnowledgeService");
@@ -39,6 +43,60 @@ const askWorkspaceAssistant = asyncHandler(async (req, res) => {
   const workspace = await getWorkspaceForMember(req.params.workspaceId, req.user._id);
   await syncWorkspace(workspace);
   const result = await askWorkspace(workspace._id.toString(), question);
+  res.json(result);
+});
+
+const summarizeGroupChat = asyncHandler(async (req, res) => {
+  const chat = await Chat.findById(req.params.chatId)
+    .populate("users", "name email")
+    .lean();
+
+  if (!chat) {
+    res.status(404);
+    throw new Error("Chat not found");
+  }
+  if (!chat.users.some((chatUser) => chatUser._id.toString() === req.user._id.toString())) {
+    res.status(403);
+    throw new Error("You do not have access to this chat");
+  }
+  if (!chat.isGroupChat) {
+    res.status(400);
+    throw new Error("Chat summarizer is available for group chats");
+  }
+
+  const messages = await Message.find({ chat: chat._id })
+    .sort({ createdAt: -1 })
+    .limit(200)
+    .populate("sender", "name email")
+    .lean();
+
+  if (!messages.length) {
+    res.status(400);
+    throw new Error("No chat messages available to summarize");
+  }
+
+  const result = await summarizeChat(
+    chat.chatName,
+    [...messages].reverse().map((message) => ({
+      sender: message.sender?.name || "Unknown",
+      content: message.content,
+      created_at: message.createdAt?.toISOString(),
+    }))
+  );
+  res.json(result);
+});
+
+const coordinateWorkspaceEvent = asyncHandler(async (req, res) => {
+  const question =
+    req.body.question?.trim() || "Are we ready for the event? What is blocked?";
+
+  const workspace = await getWorkspaceForMember(req.params.workspaceId, req.user._id);
+  await syncWorkspace(workspace);
+  const result = await coordinateEvent(
+    workspace._id.toString(),
+    question,
+    workspace.users.map(({ name, email }) => ({ name, email }))
+  );
   res.json(result);
 });
 
@@ -131,6 +189,8 @@ const applyWorkspaceTaskPlan = asyncHandler(async (req, res) => {
 module.exports = {
   applyWorkspaceTaskPlan,
   askWorkspaceAssistant,
+  coordinateWorkspaceEvent,
   createWorkspaceTaskPlan,
+  summarizeGroupChat,
   syncWorkspaceKnowledge,
 };

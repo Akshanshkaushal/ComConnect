@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 
 from .auth import require_service_token
-from .chains import answer_question, create_task_plan
+from .chains import answer_question, coordinate_event, create_task_plan, summarize_chat
 from .rag import replace_workspace_documents
 
 api = Blueprint("api", __name__)
@@ -50,3 +50,29 @@ def plan_workspace_tasks(workspace_id):
         payload.get("members", []),
     )
     return jsonify({"plan": plan.model_dump(by_alias=True), "sources": _sources(documents)})
+
+
+@api.post("/workspaces/<workspace_id>/event-coordinator")
+@require_service_token
+def coordinate_workspace_event(workspace_id):
+    payload = request.get_json(silent=True) or {}
+    question = payload.get("question", "").strip()
+    if not question:
+        return jsonify({"message": "question is required"}), 400
+    report, documents = coordinate_event(
+        workspace_id,
+        question,
+        payload.get("members", []),
+    )
+    return jsonify({"report": report.model_dump(), "sources": _sources(documents)})
+
+
+@api.post("/chats/summary")
+@require_service_token
+def summarize_group_chat():
+    payload = request.get_json(silent=True) or {}
+    messages = payload.get("messages", [])
+    if not messages:
+        return jsonify({"message": "messages are required"}), 400
+    summary = summarize_chat(payload.get("chatName", "Group chat"), messages)
+    return jsonify({"summary": summary.model_dump()})

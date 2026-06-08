@@ -23,6 +23,20 @@ def main():
     )
     assert empty_question.status_code == 400, empty_question.get_data(as_text=True)
 
+    empty_chat = client.post(
+        "/v1/chats/summary",
+        headers={"X-Service-Token": app.config["AI_SERVICE_TOKEN"]},
+        json={"messages": []},
+    )
+    assert empty_chat.status_code == 400, empty_chat.get_data(as_text=True)
+
+    empty_coordinator = client.post(
+        "/v1/workspaces/test/event-coordinator",
+        headers={"X-Service-Token": app.config["AI_SERVICE_TOKEN"]},
+        json={"question": ""},
+    )
+    assert empty_coordinator.status_code == 400, empty_coordinator.get_data(as_text=True)
+
     print("AI service smoke checks passed")
 
 

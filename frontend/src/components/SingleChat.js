@@ -28,6 +28,7 @@ import { useDisclosure } from "@chakra-ui/react";
 import { API_URL } from "../config/api.config";
 import UserListItem from "./userAvatar/UserListItem";
 import socket from "../Context/SocketContext";
+import ChatSummaryButton from "./ai/ChatSummaryButton";
 
 const SingleChat = ({ fetchAgain, setFetchAgain }) => {
   const [messages, setMessages] = useState([]);
@@ -467,6 +468,9 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
                 gap={3}
               >
                 <Box display="flex" alignItems="center" gap={2}>
+                  {selectedChat.isGroupChat && (
+                    <ChatSummaryButton chatId={selectedChat._id} />
+                  )}
                   <Box position="relative">
                     {/* Search Button/Input - Expands when clicked */}
                     <Box

@@ -47,6 +47,15 @@ The AI service smoke test verified:
 - `/health` returns `200`.
 - `/v1` routes reject missing `X-Service-Token`.
 - empty AI questions are rejected with `400` after valid service-token auth.
+- empty chat-summary requests are rejected with `400`.
+- empty event-coordinator questions are rejected with `400`.
+
+The public Express AI routes also reject unauthenticated requests:
+
+```text
+POST /api/ai/chats/:chatId/summary -> 401 without JWT
+POST /api/ai/workspaces/:workspaceId/event-coordinator -> 401 without JWT
+```
 
 ## Limitations
 
