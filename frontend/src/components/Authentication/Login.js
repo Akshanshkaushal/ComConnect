@@ -22,11 +22,7 @@ const Login = () => {
     e.preventDefault();
     setShow(!show);
   };
-  const navigate = useNavigate();
-  const handleSignup = (e) => {
-    e.preventDefault();
-    navigate("/signup");
-  };
+  const navigate = useNavigate(); 
   const toast = useToast();
   const [email, setEmail] = useState();
   const [password, setPassword] = useState();

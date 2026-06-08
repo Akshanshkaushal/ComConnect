@@ -1,104 +1,91 @@
- 
+const asyncHandler = require("express-async-handler");
+
 const Task = require("../models/taskModel");
 const User = require("../models/userModel");
-const Workspace = require("../models/workspaceModel");
+const { getWorkspaceForMember } = require("../services/workspaceAccessService");
 
-  
-exports.allocateTask = async (req, res) => {
-    const { heading, description, email, workspaceId, attachments } = req.body;
-  
-    try {
-      const workspace = await Workspace.findById(workspaceId).populate('users');
-      const assignee = await User.findOne({ email: email });
-  
-      if (!assignee) {
-        return res.status(404).json({ message: 'Assignee not found' });
-      }
-  
-      const isAssigneeInWorkspace = workspace.users.some(user => user._id.equals(assignee._id));
-  
-      if (!isAssigneeInWorkspace) {
-        return res.status(400).json({ message: 'Assignee is not part of the workspace' });
-      }
-  
-      const task = new Task({
-        heading,
-        description,
-        assignee: assignee._id,
-        attachments,
-        createdBy: req.user._id
-      });
-  
-      await task.save();
-  
-      res.status(201).json(task);
-    } catch (error) {
-      res.status(500).json({ message: error.message });
-    }
-  };
-
-exports.getMyTasks = async (req, res) => {
-  const userId = req.user._id;
-
-  try {
-    const tasks = await Task.find({ assignee: userId });
-    res.status(200).json(tasks);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+const allocateTask = asyncHandler(async (req, res) => {
+  const { heading, description, email, workspaceId, attachments } = req.body;
+  if (!heading?.trim() || !description?.trim() || !email?.trim() || !workspaceId) {
+    res.status(400);
+    throw new Error("heading, description, email, and workspaceId are required");
   }
-};
 
-exports.getAllocatedTasks = async (req, res) => {
-  const userId = req.user._id;
-
-  try {
-    const tasks = await Task.find({ createdBy: userId });
-    res.status(200).json(tasks);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  const workspace = await getWorkspaceForMember(workspaceId, req.user._id);
+  const assignee = await User.findOne({ email: email.trim() });
+  if (!assignee) {
+    res.status(404);
+    throw new Error("Assignee not found");
   }
-};
-
-exports.updateTaskStatus = async (req, res) => {
-    const { taskId, status } = req.body;
-    const userId = req.user._id;
-  
-    try {
-      const task = await Task.findById(taskId);
-  
-      if (!task) {
-        return res.status(404).json({ message: 'Task not found' });
-      }
-  
-      if (task.assignee.toString() !== userId.toString() && task.createdBy.toString() !== userId.toString()) {
-        return res.status(403).json({ message: 'You do not have permission to update this task' });
-      }
-  
-      task.status = status;
-      await task.save();
-  
-      res.status(200).json(task);
-    } catch (error) {
-      res.status(500).json({ message: error.message });
-    }
-  };
-
-exports.addComment = async (req, res) => {
-  const { taskId, comment } = req.body;
-  const userId = req.user._id;
-
-  try {
-    const task = await Task.findById(taskId);
-
-    if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
-    }
-
-    task.comments.push({ user: userId, comment });
-    await task.save();
-
-    res.status(200).json(task);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  if (!workspace.users.some((user) => user._id.equals(assignee._id))) {
+    res.status(400);
+    throw new Error("Assignee is not part of the workspace");
   }
+
+  const task = await Task.create({
+    heading: heading.trim(),
+    description: description.trim(),
+    assignee: assignee._id,
+    workspace: workspace._id,
+    attachments,
+    createdBy: req.user._id,
+  });
+  res.status(201).json(task);
+});
+
+const getMyTasks = asyncHandler(async (req, res) => {
+  const query = { assignee: req.user._id };
+  if (req.query.workspaceId) {
+    await getWorkspaceForMember(req.query.workspaceId, req.user._id);
+    query.workspace = req.query.workspaceId;
+  }
+  res.json(await Task.find(query));
+});
+
+const getAllocatedTasks = asyncHandler(async (req, res) => {
+  const query = { createdBy: req.user._id };
+  if (req.query.workspaceId) {
+    await getWorkspaceForMember(req.query.workspaceId, req.user._id);
+    query.workspace = req.query.workspaceId;
+  }
+  res.json(await Task.find(query));
+});
+
+const updateTaskStatus = asyncHandler(async (req, res) => {
+  const task = await Task.findById(req.body.taskId);
+  if (!task) {
+    res.status(404);
+    throw new Error("Task not found");
+  }
+  if (
+    task.assignee.toString() !== req.user._id.toString() &&
+    task.createdBy.toString() !== req.user._id.toString()
+  ) {
+    res.status(403);
+    throw new Error("You do not have permission to update this task");
+  }
+
+  task.status = req.body.status;
+  await task.save();
+  res.json(task);
+});
+
+const addComment = asyncHandler(async (req, res) => {
+  const task = await Task.findById(req.body.taskId);
+  if (!task) {
+    res.status(404);
+    throw new Error("Task not found");
+  }
+
+  task.comments.push({ user: req.user._id, comment: req.body.comment });
+  await task.save();
+  res.json(task);
+});
+
+module.exports = {
+  addComment,
+  allocateTask,
+  getAllocatedTasks,
+  getMyTasks,
+  updateTaskStatus,
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
 import {
   Box,
@@ -31,13 +31,15 @@ const TaskAllocator = ({ workspaceId }) => {
   const [email, setEmail] = useState("");
   const [attachments, setAttachments] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [selectedTask, setSelectedTask] = useState(null);
 
-  const config = {
-    headers: {
-      Authorization: `Bearer ${user?.token}`,
-    },
-  };
+  const config = useMemo(
+    () => ({
+      headers: {
+        Authorization: `Bearer ${user?.token}`,
+      },
+    }),
+    [user?.token]
+  );
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -92,10 +94,6 @@ const TaskAllocator = ({ workspaceId }) => {
         isClosable: true,
       });
     }
-  };
-
-  const handleTaskClick = (task) => {
-    setSelectedTask(task);
   };
 
   return (
@@ -191,7 +189,6 @@ const TaskAllocator = ({ workspaceId }) => {
                     tasks={tasks.filter((task) => task.status === "to-do")}
                     fetchTasks={fetchTasks}
                     config={config}
-                    onTaskClick={handleTaskClick}
                   />
                 </TabPanel>
                 <TabPanel>
@@ -200,7 +197,6 @@ const TaskAllocator = ({ workspaceId }) => {
                     tasks={tasks.filter((task) => task.status === "in-progress")}
                     fetchTasks={fetchTasks}
                     config={config}
-                    onTaskClick={handleTaskClick}
                   />
                 </TabPanel>
                 <TabPanel>
@@ -209,14 +205,13 @@ const TaskAllocator = ({ workspaceId }) => {
                     tasks={tasks.filter((task) => task.status === "done")}
                     fetchTasks={fetchTasks}
                     config={config}
-                    onTaskClick={handleTaskClick}
                   />
                 </TabPanel>
               </TabPanels>
             </Tabs>
             {/* Allocated Tasks Section */}
             <Box my={8}>
-              <AllocatedTasks />
+              <AllocatedTasks workspaceId={workspaceId} />
             </Box>
           </Flex>
         </Box>

@@ -1,13 +1,26 @@
-const admin = require('firebase-admin');
-const path = require('path');
+const fs = require("fs");
+const admin = require("firebase-admin");
 
-const serviceAccount = require(path.join(__dirname, 'comconnect-2b1d7-firebase-adminsdk-20r1n-c127902f6f.json'));
+const getCredential = () => {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    return admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON));
+  }
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
+  if (
+    process.env.FIREBASE_SERVICE_ACCOUNT_PATH &&
+    fs.existsSync(process.env.FIREBASE_SERVICE_ACCOUNT_PATH)
+  ) {
+    const serviceAccount = JSON.parse(
+      fs.readFileSync(process.env.FIREBASE_SERVICE_ACCOUNT_PATH, "utf8")
+    );
+    return admin.credential.cert(serviceAccount);
+  }
 
-module.exports = admin; 
+  return admin.credential.applicationDefault();
+};
 
+if (!admin.apps.length) {
+  admin.initializeApp({ credential: getCredential() });
+}
 
-
+module.exports = admin;

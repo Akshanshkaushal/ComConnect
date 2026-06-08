@@ -75,6 +75,7 @@ const messageRoutes = require("./routes/messageRoutes");
 const workspaceRoutes = require("./routes/workspaceRoutes");
 const taskRoutes = require("./routes/taskAllocatorRoutes.js");
 const notificationRoutes = require("./routes/notificationRoutes");
+const aiRoutes = require("./routes/aiRoutes");
 const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 
 // API routes
@@ -84,6 +85,7 @@ app.use("/api/message", messageRoutes);
 app.use("/api/workspace", workspaceRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/notification", notificationRoutes);
+app.use("/api/ai", aiRoutes);
 
 // Error Handling middlewares
 app.use(notFound);

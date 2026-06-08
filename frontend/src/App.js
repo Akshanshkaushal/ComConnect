@@ -15,6 +15,7 @@ import Geo from "./components/geolocation/App";
 import theme from "./theme";
 
 const App = () => {
+  
   useEffect(() => {
     const requestNotificationPermission = async () => {
       try {

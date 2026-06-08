@@ -1,23 +1,26 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
 import { Box, VStack, Text, useToast, Spinner, Center } from "@chakra-ui/react";
 import TaskCard from "./TaskCard";
 import { ChatState } from "../../Context/ChatProvider";
 import { API_URL } from "../../config/api.config";
 
-const AllocatedTasks = () => {
+const AllocatedTasks = ({ workspaceId }) => {
   const { user } = ChatState();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
-  const config = {
-    headers: {
-      Authorization: `Bearer ${user?.token}`,
-      "Content-Type": "application/json"
-    },
-    timeout: 5000
-  };
+  const config = useMemo(
+    () => ({
+      headers: {
+        Authorization: `Bearer ${user?.token}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 5000,
+    }),
+    [user?.token]
+  );
 
   const fetchAllocatedTasks = useCallback(async () => {
     if (!user?.token) return;
@@ -27,7 +30,7 @@ const AllocatedTasks = () => {
       console.log('Fetching allocated tasks from:', `${API_URL}/tasks/allocated-tasks`);
 
       const { data } = await axios.get(
-        `${API_URL}/tasks/allocated-tasks`,
+        `${API_URL}/tasks/allocated-tasks?workspaceId=${workspaceId}`,
         config
       );
 
@@ -51,7 +54,7 @@ const AllocatedTasks = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.token, toast]);
+  }, [user?.token, toast, workspaceId, config]);
 
   useEffect(() => {
     fetchAllocatedTasks();
@@ -96,4 +99,4 @@ const AllocatedTasks = () => {
   );
 };
 
-export default AllocatedTasks; 
+export default AllocatedTasks;

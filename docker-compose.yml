@@ -1,4 +1,17 @@
 services:
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${DB_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD:-admin123}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - app_network
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.1
     environment:
@@ -54,7 +67,14 @@ services:
       - KAFKA_GROUP_ID=notification-group
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - MONGODB_URI=mongodb+srv://akshanshkaushal9:GRS7yWeIDcF8SEMQ@cluster0.t7rpzk9.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
+      - MONGO_URI=${MONGO_URI:-mongodb://admin:admin123@mongodb:27017/comconnect?authSource=admin}
+      - DB_USERNAME=${DB_USERNAME:-admin}
+      - DB_PASSWORD=${DB_PASSWORD:-admin123}
+      - JWT_SECRET=${JWT_SECRET:-change-me}
+      - AI_SERVICE_URL=http://ai-service:5001
+      - AI_SERVICE_TOKEN=${AI_SERVICE_TOKEN:-local-ai-service-token}
+      - FIREBASE_SERVICE_ACCOUNT_PATH=${FIREBASE_SERVICE_ACCOUNT_PATH:-}
+      - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON:-}
     volumes:
       - ./backend:/app/backend
       - /app/backend/node_modules
@@ -62,6 +82,26 @@ services:
     depends_on:
       - kafka
       - redis
+      - mongodb
+      - ai-service
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: ai-service/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      - AI_SERVICE_TOKEN=${AI_SERVICE_TOKEN:-local-ai-service-token}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4.1-mini}
+      - CHROMA_DIR=/data/chroma
+    volumes:
+      - ./ai-service:/app
+      - chroma_data:/data/chroma
+    networks:
+      - app_network
 
   frontend:
     build:
@@ -81,8 +121,11 @@ services:
     volumes:
       - ./frontend/src:/app/frontend/src
       - ./frontend/public:/app/frontend/public
-      - /app/frontend/node_modules
 
 networks:
   app_network:
     driver: bridge
+
+volumes:
+  mongodb_data:
+  chroma_data:

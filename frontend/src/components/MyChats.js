@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Box, Stack, Text, Button, Flex, Grid } from "@chakra-ui/react";
-import { AddIcon } from "@chakra-ui/icons";
+import { Box, Stack, Text, Button, Flex } from "@chakra-ui/react";
 import { useToast } from "@chakra-ui/toast";
 import { ChatState } from "../Context/ChatProvider";
 import { useParams, useNavigate } from "react-router-dom";
@@ -9,11 +8,7 @@ import ChatLoading from "./ChatLoading";
 import GroupChatModal from "./miscellaneous/GroupChatModal";
 import { getSender } from "../config/ChatLogics";
 import "./chatbox.css";
-import { API_URL } from "../config/api.config";
-import { IoChatbubblesSharp } from "react-icons/io5";
-import { CiBoxList } from "react-icons/ci";
-import { FaLocationDot } from "react-icons/fa6";
-import { FaPlus } from "react-icons/fa";
+import WorkspaceAssistant from "./ai/WorkspaceAssistant";
 
 const MyChats = ({ fetchAgain }) => {
   const [loggedUser, setLoggedUser] = useState();
@@ -186,6 +181,7 @@ const MyChats = ({ fetchAgain }) => {
         >
           Map
         </Button>
+        <WorkspaceAssistant workspaceId={workspaceId} />
       </Box>
       <Box
         d="flex"
