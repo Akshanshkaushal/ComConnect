@@ -251,6 +251,9 @@ const CreateWorkspaceModal = ({ onClose }) => {
 
                 <FormControl isRequired>
                   <FormLabel color="gray.300">Add Roles</FormLabel>
+                  <Text color="#8f9d97" fontSize="sm" mb={2}>
+                    Each role creates one private workspace channel.
+                  </Text>
                   <HStack>
                     <Input
                       placeholder="Enter role name"

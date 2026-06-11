@@ -4,7 +4,7 @@ services:
     plan: starter
     region: oregon
     ipAllowList: []
-    maxmemoryPolicy: allkeys-lru
+    maxmemoryPolicy: noeviction
 
   - type: web
     name: comconnect-api
@@ -31,15 +31,16 @@ services:
         value: http://comconnect-notifications:5104
       - key: AI_ORCHESTRATOR_URL
         value: http://comconnect-ai-orchestrator:5105
+      - key: MESSAGE_WORKER_SERVICE_URL
+        value: http://comconnect-message-worker:5106
 
   - type: pserv
     name: comconnect-identity
     runtime: docker
     plan: starter
     region: oregon
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: ./backend/dockerfiles/identity.Dockerfile
     dockerContext: .
-    dockerCommand: node microservices/identityServer.js
     autoDeployTrigger: checksPass
     envVars:
       - key: NODE_ENV
@@ -62,9 +63,8 @@ services:
     runtime: docker
     plan: starter
     region: oregon
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: ./backend/dockerfiles/chat.Dockerfile
     dockerContext: .
-    dockerCommand: node microservices/chatServer.js
     autoDeployTrigger: checksPass
     envVars:
       - key: NODE_ENV
@@ -90,15 +90,77 @@ services:
           envVarKey: INTERNAL_SERVICE_TOKEN
       - key: NOTIFICATION_SERVICE_URL
         value: http://comconnect-notifications:5104
+      - key: REDIS_HOST
+        fromService:
+          name: comconnect-redis
+          type: keyvalue
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          name: comconnect-redis
+          type: keyvalue
+          property: port
+      - key: PRESENCE_TTL_SECONDS
+        value: "75"
+      - key: MESSAGE_STREAM_KEY
+        value: chat:messages
+      - key: MESSAGE_STREAM_CONSUMER_GROUP
+        value: message-persistence
+
+  - type: pserv
+    name: comconnect-message-worker
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./backend/dockerfiles/message-worker.Dockerfile
+    dockerContext: .
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5106
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: MONGO_URI
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: MONGO_URI
+      - key: JWT_SECRET
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: JWT_SECRET
+      - key: INTERNAL_SERVICE_TOKEN
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: INTERNAL_SERVICE_TOKEN
+      - key: NOTIFICATION_SERVICE_URL
+        value: http://comconnect-notifications:5104
+      - key: REDIS_HOST
+        fromService:
+          name: comconnect-redis
+          type: keyvalue
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          name: comconnect-redis
+          type: keyvalue
+          property: port
+      - key: MESSAGE_STREAM_KEY
+        value: chat:messages
+      - key: MESSAGE_STREAM_CONSUMER_GROUP
+        value: message-persistence
 
   - type: pserv
     name: comconnect-tasks
     runtime: docker
     plan: starter
     region: oregon
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: ./backend/dockerfiles/tasks.Dockerfile
     dockerContext: .
-    dockerCommand: node microservices/taskServer.js
     autoDeployTrigger: checksPass
     envVars:
       - key: NODE_ENV
@@ -123,9 +185,8 @@ services:
     runtime: docker
     plan: starter
     region: oregon
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: ./backend/dockerfiles/notifications.Dockerfile
     dockerContext: .
-    dockerCommand: node microservices/notificationServer.js
     autoDeployTrigger: checksPass
     envVars:
       - key: NODE_ENV
@@ -175,9 +236,8 @@ services:
     runtime: docker
     plan: starter
     region: oregon
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: ./backend/dockerfiles/ai-orchestrator.Dockerfile
     dockerContext: .
-    dockerCommand: node microservices/aiOrchestratorServer.js
     autoDeployTrigger: checksPass
     envVars:
       - key: NODE_ENV

@@ -1,5 +1,10 @@
 const { startHttpService } = require("./microservices/runtime");
 const createSocketServer = require("./microservices/socketServer");
+const {
+  closeMessageStreamProducer,
+  MessageStreamWorker,
+} = require("./services/messageStreamService");
+const messageWorker = new MessageStreamWorker();
 
 const routes = {
   "/api/user": require("./routes/userRoutes"),
@@ -15,6 +20,13 @@ startHttpService({
   serviceName: "comconnect-backend",
   port: Number(process.env.PORT || 5000),
   createServer: createSocketServer,
+  async startDependencies() {
+    await messageWorker.start();
+    return async () => {
+      await messageWorker.close();
+      await closeMessageStreamProducer();
+    };
+  },
   registerRoutes(app) {
     Object.entries(routes).forEach(([path, router]) => app.use(path, router));
   },

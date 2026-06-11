@@ -17,9 +17,11 @@ ComConnect is an event collaboration application with:
 - group chat summarization
 - an event coordinator agent
 
-The codebase uses independently deployable services without duplicating models
-and controller logic. The Node services currently share one MongoDB cluster,
-but each service owns a bounded API and can be scaled or deployed separately.
+The codebase is a monorepo microservices system. Shared backend modules stay in
+one repository, but every service has its own Dockerfile, image, container,
+health check, logs, scaling policy, and release artifact. The Node services
+currently share one MongoDB cluster, but each service owns a bounded API and can
+be scaled or deployed separately.
 
 ## 2. Complete System Diagram
 
@@ -30,19 +32,22 @@ flowchart LR
 
   Gateway --> Identity["Identity Service<br/>users, workspaces, roles"]
   Gateway --> Chat["Chat Service<br/>messages, groups, Socket.IO"]
+  Gateway --> WorkerHealth["Message Worker health"]
   Gateway --> Tasks["Task Service<br/>allocation, status, comments"]
   Gateway --> Notify["Notification Service<br/>FCM, Kafka consumer, tokens"]
   Gateway --> AIAPI["AI Orchestrator<br/>authorization, context assembly, approvals"]
 
   Identity --> Mongo[("MongoDB")]
-  Chat --> Mongo
+  Chat --> Redis[("Redis<br/>Socket.IO adapter, presence TTL, message stream")]
+  Redis --> Worker["Message Persistence Worker"]
+  Worker --> Mongo
   Tasks --> Mongo
   Notify --> Mongo
   AIAPI --> Mongo
 
   Chat -->|"internal authenticated request"| Notify
   Notify --> Kafka[("Kafka")]
-  Notify --> Redis[("Redis")]
+  Notify --> Redis
   Notify --> Firebase["Firebase Cloud Messaging"]
 
   AIAPI --> AIEngine["Flask + LangChain AI Engine"]
@@ -66,15 +71,17 @@ on the Docker, Render private, or AWS Cloud Map network.
 | API gateway | 5000 | Routing, rate limiting, CORS, security headers, Swagger, WebSocket forwarding, aggregate health | All internal services |
 | Identity service | 5101 | Registration, login, users, workspaces, membership, roles | MongoDB |
 | Chat service | 5102 | Chats, messages, groups, Socket.IO rooms and broadcasts | MongoDB, notification service |
+| Message persistence worker | 5106 | Redis Streams consumer group, idempotent message writes, latest-message updates, dead-letter handling | Redis, MongoDB, notification service |
 | Task service | 5103 | Task assignment, status, comments, workspace task queries | MongoDB |
 | Notification service | 5104 | FCM tokens, Kafka producer/consumer, Redis token cache, push delivery | MongoDB, Redis, Kafka, Firebase |
 | AI orchestrator | 5105 | JWT and workspace authorization, source document assembly, task-plan approvals | MongoDB, AI engine |
 | AI engine | 5001 | LangChain chains, RAG retrieval, structured AI outputs | Chroma, embedding model, chat model |
 | Frontend | 3000 | Responsive workspace, chat, task, RAG, planner, summary, and coordinator UI | API gateway |
 
-Service entry points live in `backend/microservices`. `backend/server.js` remains
-a compact all-in-one compatibility process for direct development, while Docker
-Compose and production deployments run the bounded services.
+Service entry points live in `backend/microservices`. Service-specific
+Dockerfiles live in `backend/dockerfiles`. `backend/server.js` remains a compact
+all-in-one compatibility process for direct development, while Docker Compose
+and production deployments run separate images for the bounded services.
 
 ## 4. Gateway Contract
 
@@ -91,8 +98,9 @@ addProxy("/api/ai", services.ai);
 ```
 
 Socket.IO traffic on `/socket.io` is forwarded to the chat service with upgrade
-support. Swagger UI is available at `/api-docs`, and the machine-readable
-contract is available at `/openapi.json`.
+support. Chat replicas share rooms through the Socket.IO Redis adapter. Swagger
+UI is available at `/api-docs`, and the machine-readable contract is available
+at `/openapi.json`.
 
 Operational endpoints:
 
@@ -110,6 +118,8 @@ sequenceDiagram
   participant U as Browser
   participant G as API Gateway
   participant S as Internal Service
+  participant R as Redis Streams
+  participant W as Message Worker
   participant DB as MongoDB
   participant AI as AI Engine
 
@@ -148,9 +158,12 @@ sequenceDiagram
 
   A->>G: POST /api/message
   G->>C: Forward authenticated request
-  C->>DB: Create message and update latestMessage
-  C-->>A: 201 saved message
-  C->>N: POST /internal/notifications/chat-message
+  C->>R: XADD chat:messages
+  W->>R: XREADGROUP message-persistence
+  W->>DB: Idempotent create + update latestMessage
+  W->>R: Store result + XACK
+  C-->>A: 201 persisted message
+  W->>N: POST /internal/notifications/chat-message
   N->>K: Publish chat-notifications event
   K-->>N: Consumer receives event
   N-->>B: Firebase push notification
@@ -159,12 +172,48 @@ sequenceDiagram
   C-->>B: "message recieved" event
 ```
 
+Failed message events are copied to `chat:messages:dead-letter` before being
+acknowledged. `streamEventId` is unique in MongoDB, so a reclaimed or retried
+stream event cannot create a duplicate message.
+
 The Kafka producer and consumer use the same configurable topic,
 `chat-notifications`. If Kafka is unavailable, notification delivery falls
-back to direct FCM delivery. Redis stores FCM tokens under
-`user:{userId}:fcmToken`.
+back to direct FCM delivery.
 
-## 7. Workspace-Scoped RAG
+### WebSocket Presence and Horizontal Scaling
+
+```mermaid
+sequenceDiagram
+  participant U as Browser
+  participant G as Gateway
+  participant C as Chat replica
+  participant R as Redis
+
+  U->>G: Authenticated Socket.IO upgrade
+  G->>C: WebSocket connection
+  C->>C: Verify JWT
+  C->>R: SET presence:socket:{id} EX 75
+  C->>R: SADD presence:user:{userId}:sockets
+  C->>R: Publish Socket.IO room events
+  loop while connected
+    C->>R: Refresh socket TTL
+  end
+  C->>R: Remove socket on disconnect
+  C->>R: Store last-seen when no live sockets remain
+```
+
+The presence API exposes single and batch checks. Expiring socket keys recover
+from crashed replicas, while the Redis adapter lets any chat replica deliver to
+a user room owned by another replica.
+
+## 7. Workspace Role Channels
+
+Workspace creation is intentionally linear: each role creates exactly one
+predefined channel. For roles `Logistics`, `Catering`, and `Registration`, the
+system creates three channels with those names. It does not create pair or
+triple combinations. Joining a role adds the member only to that role channel.
+
+## 8. Workspace-Scoped RAG
 
 ### Sources
 
@@ -240,7 +289,7 @@ sequenceDiagram
 The prompt treats retrieved messages and tasks as untrusted content and asks the
 model to answer only from retrieved evidence.
 
-## 8. Task Planning Agent
+## 9. Task Planning Agent
 
 The planner accepts a goal such as "Plan the registration desk setup" and
 returns validated structured tasks.
@@ -266,7 +315,7 @@ sequenceDiagram
 The Pydantic schema limits output size and requires task fields. The agent can
 propose work but cannot claim it created or completed work.
 
-## 9. Chat Summarizer
+## 10. Chat Summarizer
 
 The `Summarize Chat` control is available in group chat headers. The output is
 structured as:
@@ -284,7 +333,7 @@ structured as:
 The orchestrator verifies that the current user can access the chat, loads the
 messages, and sends only that chat transcript to the AI engine.
 
-## 10. Event Coordinator Agent
+## 11. Event Coordinator Agent
 
 The coordinator combines task state, chat activity, and workspace membership to
 answer:
@@ -297,7 +346,7 @@ answer:
 It produces readiness, blockers, workload concerns, follow-ups, and evidence.
 It is advisory and does not modify tasks.
 
-## 11. Data Ownership
+## 12. Data Ownership
 
 The current migration-safe design uses a shared MongoDB cluster and shared
 Mongoose model package. Logical ownership is:
@@ -306,6 +355,7 @@ Mongoose model package. Logical ownership is:
 | --- | --- |
 | Users, workspaces, roles | Identity service |
 | Chats and messages | Chat service |
+| Message ingestion and persistence | Message persistence worker |
 | Tasks and comments | Task service |
 | FCM tokens and delivery state | Notification service |
 | Vectors and AI retrieval metadata | AI engine |
@@ -314,7 +364,7 @@ The next isolation step is database-per-service or schema-per-service with
 events for cross-service projections. The gateway and runtime split means that
 change does not require changing frontend API paths.
 
-## 12. Local Runtime
+## 13. Local Runtime
 
 ```bash
 docker compose up --build
@@ -329,7 +379,7 @@ URLs:
 - aggregate service health: `http://localhost:5000/health/services`
 - AI engine direct health: `http://localhost:5001/health`
 
-## 13. Deployment Architectures
+## 14. Deployment Architectures
 
 ### Render and Vercel
 
@@ -339,6 +389,7 @@ flowchart LR
   RW --> RP["Render Private Services"]
   RP --> Atlas[("MongoDB Atlas")]
   RP --> RK[("Render Key Value")]
+  RK --> MW["Message persistence worker"]
   RP --> CK[("External Kafka")]
   RP --> AI["AI Engine + Persistent Chroma Disk"]
 ```
@@ -356,7 +407,8 @@ flowchart LR
   ALB --> ECS["ECS Fargate Gateway"]
   ECS --> CloudMap["Cloud Map Service Discovery"]
   CloudMap --> Services["Fargate Internal Services"]
-  Services --> Redis["ElastiCache Redis"]
+  Services --> Redis["Multi-AZ ElastiCache Redis<br/>presence, adapter, streams"]
+  Redis --> MW["Fargate message worker"]
   Services --> Secrets["Secrets Manager"]
   Services --> Atlas[("MongoDB Atlas")]
   Services --> Kafka[("Managed External Kafka")]
@@ -365,7 +417,7 @@ flowchart LR
 Terraform is in `infra/aws`. CloudFront forwards `/api/*` and `/socket.io/*` to
 the ALB, so the frontend can use one HTTPS origin.
 
-## 14. CI/CD
+## 15. CI/CD
 
 - `ci.yml`: Node syntax checks, frontend build, Flask tests, Compose validation,
   Terraform formatting and validation.

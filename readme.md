@@ -5,8 +5,10 @@ tasks, notifications, and AI-assisted planning.
 
 ## Features
 
-- Workspace registration, membership, and roles
-- Direct and group chat with Socket.IO
+- Workspace registration with one channel per role
+- Direct and group chat with horizontally scalable Socket.IO
+- Redis TTL presence registry for online/offline and last-seen state
+- Redis Streams message ingestion with a dedicated MongoDB persistence worker
 - Workspace task allocation, status, and comments
 - Kafka, Redis, and Firebase notification pipeline
 - Workspace-scoped RAG over chats, tasks, and workspace metadata
@@ -18,9 +20,12 @@ tasks, notifications, and AI-assisted planning.
 
 ## Architecture
 
-The public API gateway routes to independently deployable identity, chat, task,
-notification, and AI orchestrator services. The Flask/LangChain AI engine is
-internal-only and stores one Chroma vector collection per workspace.
+ComConnect uses a monorepo microservices structure: shared backend modules live
+in one repo, but identity, chat, message-worker, tasks, notifications, and AI
+orchestrator are separate Docker images and deployment units. Redis provides the
+Socket.IO adapter, presence registry, and durable-in-flight message stream. The
+Flask/LangChain AI engine is internal-only and stores one Chroma vector
+collection per workspace.
 
 See:
 

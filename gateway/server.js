@@ -20,6 +20,8 @@ const services = {
   tasks: process.env.TASK_SERVICE_URL || "http://localhost:5103",
   notifications: process.env.NOTIFICATION_SERVICE_URL || "http://localhost:5104",
   ai: process.env.AI_ORCHESTRATOR_URL || "http://localhost:5105",
+  messageWorker:
+    process.env.MESSAGE_WORKER_SERVICE_URL || "http://localhost:5106",
 };
 const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
   .split(",")

@@ -38,6 +38,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
   const [typing, setTyping] = useState(false);
   const [istyping, setIsTyping] = useState(false);
   const [pendingMessages, setPendingMessages] = useState([]);
+  const [peerPresence, setPeerPresence] = useState(null);
 
   // Use ref to track the currently selected chat for socket listeners
   const selectedChatCompareRef = useRef();
@@ -274,7 +275,8 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
       socket.connect();
     }
 
-    socket.emit("setup", user);
+    socket.auth = { token: user.token };
+    socket.emit("setup");
 
     const handleConnected = () => {
       console.log("Socket connected successfully");
@@ -304,6 +306,35 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
     selectedChatCompareRef.current = selectedChat;
     // eslint-disable-next-line
   }, [selectedChat]);
+
+  useEffect(() => {
+    if (!selectedChat || selectedChat.isGroupChat) {
+      setPeerPresence(null);
+      return undefined;
+    }
+
+    const peer = getSenderFull(user, selectedChat.users);
+    if (!peer?._id) return undefined;
+
+    const loadPresence = async () => {
+      try {
+        const { data } = await axios.get(
+          `${API_URL}/chat/presence/${peer._id}`,
+          { headers: { Authorization: `Bearer ${user.token}` } }
+        );
+        setPeerPresence(data);
+      } catch {
+        setPeerPresence(null);
+      }
+    };
+    const handlePresence = (state) => {
+      if (state.userId === peer._id) setPeerPresence(state);
+    };
+
+    loadPresence();
+    socket.on("presence changed", handlePresence);
+    return () => socket.off("presence changed", handlePresence);
+  }, [selectedChat, user]);
 
   useEffect(() => {
     const handleMessageReceived = (newMessageRecieved) => {
@@ -446,7 +477,16 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
                       user={getSenderFull(user, selectedChat.users)}
                     >
                       <Box width="100%" cursor="pointer">
-                        {getSender(user, selectedChat.users)}
+                        <Text fontSize={{ base: "17px", md: "18px" }} fontWeight="700">
+                          {getSender(user, selectedChat.users)}
+                        </Text>
+                        <Text
+                          color={peerPresence?.online ? "#6ee7b7" : "#8f9d97"}
+                          fontSize="11px"
+                          fontWeight="500"
+                        >
+                          {peerPresence?.online ? "Online" : "Offline"}
+                        </Text>
                       </Box>
                     </ProfileModal>
                   ) : (

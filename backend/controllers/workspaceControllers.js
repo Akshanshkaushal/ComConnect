@@ -1,7 +1,7 @@
-const asyncHandler = require('express-async-handler');
-const Workspace = require('../models/workspaceModel');
-const User = require('../models/userModel');
-const Chat = require('../models/chatModel');
+const asyncHandler = require("express-async-handler");
+const Workspace = require("../models/workspaceModel");
+const User = require("../models/userModel");
+const Chat = require("../models/chatModel");
 
 //@description     Create a new workspace
 //@route           POST /api/workspace
@@ -12,50 +12,38 @@ const createWorkspace = asyncHandler(async (req, res) => {
   const { name, roles } = req.body;
   const user = req.user;
 
-  if (!name || !roles || roles.length === 0) {
+  const normalizedRoles = [...new Set(
+    (Array.isArray(roles) ? roles : [])
+      .map((role) => role?.trim())
+      .filter(Boolean)
+  )];
+
+  if (!name?.trim() || normalizedRoles.length === 0) {
     res.status(400);
-    throw new Error('Please provide workspace name and roles.');
+    throw new Error("Please provide a workspace name and at least one role.");
   }
 
-  // Helper function to generate all combinations of roles
-  const getCombinations = (roles) => {
-    const result = [];
-    const f = (prefix, roles) => {
-      for (let i = 0; i < roles.length; i++) {
-        result.push([...prefix, roles[i]]);
-        f([...prefix, roles[i]], roles.slice(i + 1));
-      }
-    };
-    f([], roles);
-    return result;
-  };
-
-  // Create the workspace
   const workspace = await Workspace.create({
-    workspaceName: name,
+    workspaceName: name.trim(),
     createdBy: user._id,
-    roles: roles.map(role => ({ roleName: role, users: [] })),
-    users: [user._id] // Add the creator to the workspace's users list
+    roles: normalizedRoles.map((roleName) => ({ roleName, users: [] })),
+    users: [user._id],
   });
 
-  // Create groups based on roles and their combinations
-  const roleCombinations = getCombinations(roles);
-  const groups = roleCombinations.map(combination => ({
-    chatName: combination.join('+'), // Using combination of role names as the group name
+  // Each role owns exactly one predefined channel. Role combinations are not
+  // materialized because they grow exponentially and are difficult to govern.
+  const groups = normalizedRoles.map((roleName) => ({
+    chatName: roleName,
     isGroupChat: true,
-    users: [user._id], // Add the creator as a member
+    users: [user._id],
     groupAdmin: user._id,
-    workspace: workspace._id // Link the group to the workspace
+    workspace: workspace._id,
   }));
 
-  // Save groups to database
   const createdGroups = await Chat.insertMany(groups);
-
-  // Update workspace with the created groups
-  workspace.groups = createdGroups.map(group => group._id);
+  workspace.groups = createdGroups.map((group) => group._id);
   await workspace.save();
 
-  // Add workspace to the user's list of workspaces
   const userDoc = await User.findById(user._id);
   if (!userDoc.workspaces.includes(workspace._id)) {
     userDoc.workspaces.push(workspace._id);
@@ -64,7 +52,7 @@ const createWorkspace = asyncHandler(async (req, res) => {
 
   res.status(201).json({
     workspace,
-    groups: createdGroups
+    groups: createdGroups,
   });
 });
   
@@ -75,19 +63,39 @@ const createWorkspace = asyncHandler(async (req, res) => {
 //@access          Protected
 // Controller function to add a role to an existing workspace
 const addRole = asyncHandler(async (req, res) => {
-    const { roleName } = req.body;
-    const workspace = await Workspace.findById(req.params.id);
-  
-    if (!workspace) {
-      res.status(404);
-      throw new Error('Workspace not found');
-    }
-  
-    workspace.roles.push({ roleName, users: [] });
-    await workspace.save();
-  
-    res.status(201).json(workspace);
+  const roleName = req.body.roleName?.trim();
+  const workspace = await Workspace.findById(req.params.id);
+
+  if (!workspace) {
+    res.status(404);
+    throw new Error("Workspace not found");
+  }
+  if (workspace.createdBy.toString() !== req.user._id.toString()) {
+    res.status(403);
+    throw new Error("Only the workspace owner can add roles");
+  }
+  if (!roleName) {
+    res.status(400);
+    throw new Error("Role name is required");
+  }
+  if (workspace.roles.some((role) => role.roleName.toLowerCase() === roleName.toLowerCase())) {
+    res.status(409);
+    throw new Error("Role already exists");
+  }
+
+  const group = await Chat.create({
+    chatName: roleName,
+    isGroupChat: true,
+    users: [req.user._id],
+    groupAdmin: req.user._id,
+    workspace: workspace._id,
   });
+  workspace.roles.push({ roleName, users: [] });
+  workspace.groups.push(group._id);
+  await workspace.save();
+
+  res.status(201).json({ workspace, group });
+});
 
 //@description     Get roles in a workspace
 //@route           GET /api/workspace/:id/roles
@@ -136,27 +144,22 @@ const joinWorkspace = asyncHandler(async (req, res) => {
   }
 
   // Add user to the workspace's users list if not already added
-  if (!workspace.users.includes(user._id)) {
+  if (!workspace.users.some((userId) => userId.equals(user._id))) {
     workspace.users.push(user._id);
   }
 
   // Add user to the role's users list if not already added
-  if (!role.users.includes(user._id)) {
+  if (!role.users.some((userId) => userId.equals(user._id))) {
     role.users.push(user._id);
   }
 
-  // Find all groups that include the roleName
-  const groups = await Chat.find({
-    workspace: workspaceId,
-    chatName: new RegExp(`\\b${role.roleName}\\b`) // Regex to match groups containing the roleName
-  });
-
-  // Add user to each group if not already added
-  for (const group of groups) {
-    if (!group.users.includes(user._id)) {
-      group.users.push(user._id);
-      await group.save();
-    }
+  if (group.workspace.toString() !== workspace._id.toString()) {
+    res.status(400);
+    throw new Error("Group does not belong to this workspace");
+  }
+  if (!group.users.some((userId) => userId.equals(user._id))) {
+    group.users.push(user._id);
+    await group.save();
   }
 
   // Save the workspace
@@ -164,15 +167,16 @@ const joinWorkspace = asyncHandler(async (req, res) => {
 
   // Add workspace to the user's list of workspaces if not already added
   const userDoc = await User.findById(user._id);
-  if (!userDoc.workspaces.includes(workspace._id)) {
+  if (!userDoc.workspaces.some((workspaceId) => workspaceId.equals(workspace._id))) {
     userDoc.workspaces.push(workspace._id);
     await userDoc.save();
   }
 
   res.status(200).json({
-    message: 'Successfully joined the workspace and relevant groups.',
+    message: "Successfully joined the workspace role channel.",
     workspace,
-    groups
+    group,
+    groups: [group],
   });
 });
 
@@ -187,11 +191,7 @@ const getUserWorkspaces = asyncHandler(async (req, res) => {
 const getGroups = asyncHandler(async (req, res) => {
     const workspaceId = req.params.id;
 
-    const workspace = await Workspace.findById(workspaceId).populate('groups');
-    console.log("workspace",workspace);
-    console.log("groups",workspace.groups);
-
-  
+    const workspace = await Workspace.findById(workspaceId).populate("groups");
     if (!workspace) {
       res.status(404);
       throw new Error('Workspace not found');

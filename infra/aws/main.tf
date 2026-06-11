@@ -9,41 +9,38 @@ locals {
     gateway = {
       port       = 5000
       repository = "gateway"
-      command    = ["node", "server.js"]
     }
     identity = {
       port       = 5101
-      repository = "backend"
-      command    = ["node", "microservices/identityServer.js"]
+      repository = "identity"
     }
     chat = {
       port       = 5102
-      repository = "backend"
-      command    = ["node", "microservices/chatServer.js"]
+      repository = "chat"
+    }
+    message-worker = {
+      port       = 5106
+      repository = "message-worker"
     }
     tasks = {
       port       = 5103
-      repository = "backend"
-      command    = ["node", "microservices/taskServer.js"]
+      repository = "tasks"
     }
     notifications = {
       port       = 5104
-      repository = "backend"
-      command    = ["node", "microservices/notificationServer.js"]
+      repository = "notifications"
     }
     ai-orchestrator = {
       port       = 5105
-      repository = "backend"
-      command    = ["node", "microservices/aiOrchestratorServer.js"]
+      repository = "ai-orchestrator"
     }
     ai-engine = {
       port       = 5001
       repository = "ai-engine"
-      command    = null
     }
   }
 
-  backend_services = toset(["identity", "chat", "tasks", "notifications", "ai-orchestrator"])
+  backend_services = toset(["identity", "chat", "message-worker", "tasks", "notifications", "ai-orchestrator"])
   secret_keys      = ["MONGO_URI", "JWT_SECRET", "INTERNAL_SERVICE_TOKEN", "AI_SERVICE_TOKEN"]
 }
 
@@ -214,7 +211,7 @@ resource "aws_service_discovery_service" "service" {
 }
 
 resource "aws_ecr_repository" "repository" {
-  for_each             = toset(["gateway", "backend", "ai-engine"])
+  for_each             = toset([for service in values(local.services) : service.repository])
   name                 = "${local.name}-${each.key}"
   image_tag_mutability = "MUTABLE"
 
@@ -322,15 +319,21 @@ resource "aws_elasticache_subnet_group" "main" {
   subnet_ids = aws_subnet.public[*].id
 }
 
-resource "aws_elasticache_cluster" "redis" {
-  cluster_id           = substr("${local.name}-redis", 0, 40)
-  engine               = "redis"
-  node_type            = "cache.t4g.micro"
-  num_cache_nodes      = 1
-  parameter_group_name = "default.redis7"
-  port                 = 6379
-  subnet_group_name    = aws_elasticache_subnet_group.main.name
-  security_group_ids   = [aws_security_group.ecs.id]
+resource "aws_elasticache_replication_group" "redis" {
+  replication_group_id       = substr("${local.name}-redis", 0, 40)
+  description                = "ComConnect presence, Socket.IO adapter, and message streams"
+  engine                     = "redis"
+  engine_version             = "7.1"
+  node_type                  = "cache.t4g.micro"
+  num_cache_clusters         = 2
+  port                       = 6379
+  parameter_group_name       = "default.redis7"
+  subnet_group_name          = aws_elasticache_subnet_group.main.name
+  security_group_ids         = [aws_security_group.ecs.id]
+  automatic_failover_enabled = true
+  multi_az_enabled           = true
+  at_rest_encryption_enabled = true
+  snapshot_retention_limit   = 7
 }
 
 resource "aws_ecs_task_definition" "service" {
@@ -347,7 +350,6 @@ resource "aws_ecs_task_definition" "service" {
     name      = each.key
     image     = "${aws_ecr_repository.repository[each.value.repository].repository_url}:${var.image_tag}"
     essential = true
-    command   = each.value.command
     portMappings = [{
       containerPort = each.value.port
       hostPort      = each.value.port
@@ -358,14 +360,19 @@ resource "aws_ecs_task_definition" "service" {
         { name = "NODE_ENV", value = "production" },
         { name = "PORT", value = tostring(each.value.port) },
         { name = "CORS_ORIGIN", value = var.cors_origin },
-        { name = "REDIS_HOST", value = aws_elasticache_cluster.redis.cache_nodes[0].address },
+        { name = "REDIS_HOST", value = aws_elasticache_replication_group.redis.primary_endpoint_address },
         { name = "REDIS_PORT", value = "6379" },
+        { name = "PRESENCE_TTL_SECONDS", value = "75" },
+        { name = "MESSAGE_STREAM_KEY", value = "chat:messages" },
+        { name = "MESSAGE_STREAM_CONSUMER_GROUP", value = "message-persistence" },
+        { name = "MESSAGE_PERSIST_TIMEOUT_MS", value = "10000" },
         { name = "IDENTITY_SERVICE_URL", value = "http://identity.comconnect.local:5101" },
         { name = "CHAT_SERVICE_URL", value = "http://chat.comconnect.local:5102" },
         { name = "TASK_SERVICE_URL", value = "http://tasks.comconnect.local:5103" },
         { name = "NOTIFICATION_SERVICE_URL", value = "http://notifications.comconnect.local:5104" },
         { name = "AI_ORCHESTRATOR_URL", value = "http://ai-orchestrator.comconnect.local:5105" },
         { name = "AI_SERVICE_URL", value = "http://ai-engine.comconnect.local:5001" },
+        { name = "MESSAGE_WORKER_SERVICE_URL", value = "http://message-worker.comconnect.local:5106" },
         { name = "CHROMA_DIR", value = "/tmp/chroma" },
         { name = "KAFKA_SSL", value = "true" }
       ],

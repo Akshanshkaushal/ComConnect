@@ -111,6 +111,7 @@ const startHttpService = async ({
   port,
   registerRoutes,
   createServer,
+  startDependencies,
   closeDependencies,
 }) => {
   const app = createServiceApp(serviceName);
@@ -118,7 +119,12 @@ const startHttpService = async ({
   attachErrorHandling(app);
 
   await connectDatabase();
-  const server = createServer ? createServer(app) : app.listen(port, "0.0.0.0");
+  const dependencyCleanup = startDependencies
+    ? await startDependencies(app)
+    : async () => {};
+  const server = createServer
+    ? await createServer(app)
+    : app.listen(port, "0.0.0.0");
 
   if (createServer) {
     server.listen(port, "0.0.0.0");
@@ -132,7 +138,11 @@ const startHttpService = async ({
     process.exitCode = 1;
   });
 
-  installShutdownHandlers(server, serviceName, closeDependencies);
+  installShutdownHandlers(server, serviceName, async () => {
+    await dependencyCleanup?.();
+    await server.comconnectCloseDependencies?.();
+    await closeDependencies?.();
+  });
   return { app, server };
 };
 

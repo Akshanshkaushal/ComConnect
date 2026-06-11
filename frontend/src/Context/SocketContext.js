@@ -20,7 +20,12 @@ export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider = ({ children }) => {
   useEffect(() => {
-    const connect = () => socket.connect();
+    const connect = () => {
+      const userInfo = JSON.parse(localStorage.getItem("userInfo") || "null");
+      if (!userInfo?.token) return;
+      socket.auth = { token: userInfo.token };
+      socket.connect();
+    };
     const disconnect = () => socket.disconnect();
     const handleVisibility = () => {
       if (document.visibilityState === "visible") connect();

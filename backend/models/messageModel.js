@@ -6,6 +6,7 @@ const messageSchema = mongoose.Schema(
     content: { type: String, trim: true },
     chat: { type: mongoose.Schema.Types.ObjectId, ref: "Chat" },
     readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    streamEventId: { type: String, unique: true, sparse: true, index: true },
   },
   { timestamps: true }
 );

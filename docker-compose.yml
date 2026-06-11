@@ -11,6 +11,10 @@ x-backend-environment: &backend-environment
   NOTIFICATION_SERVICE_URL: http://notification-service:5104
   REDIS_HOST: redis
   REDIS_PORT: 6379
+  PRESENCE_TTL_SECONDS: 75
+  MESSAGE_STREAM_KEY: chat:messages
+  MESSAGE_STREAM_CONSUMER_GROUP: message-persistence
+  MESSAGE_PERSIST_TIMEOUT_MS: 10000
   KAFKA_BROKER: kafka:9092
   KAFKA_CLIENT_ID: notification-service
   KAFKA_GROUP_ID: notification-workers
@@ -18,9 +22,6 @@ x-backend-environment: &backend-environment
   FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
 
 x-backend-service: &backend-service
-  build:
-    context: .
-    dockerfile: backend/Dockerfile
   restart: unless-stopped
   environment: *backend-environment
   networks:
@@ -98,14 +99,20 @@ services:
 
   identity-service:
     <<: *backend-service
-    command: ["node", "microservices/identityServer.js"]
+    image: comconnect-identity-service
+    build:
+      context: .
+      dockerfile: backend/dockerfiles/identity.Dockerfile
     environment:
       <<: *backend-environment
       PORT: 5101
 
   chat-service:
     <<: *backend-service
-    command: ["node", "microservices/chatServer.js"]
+    image: comconnect-chat-service
+    build:
+      context: .
+      dockerfile: backend/dockerfiles/chat.Dockerfile
     environment:
       <<: *backend-environment
       PORT: 5102
@@ -114,17 +121,42 @@ services:
         condition: service_healthy
       notification-service:
         condition: service_started
+      redis:
+        condition: service_healthy
+      message-worker:
+        condition: service_started
+
+  message-worker:
+    <<: *backend-service
+    image: comconnect-message-worker
+    build:
+      context: .
+      dockerfile: backend/dockerfiles/message-worker.Dockerfile
+    environment:
+      <<: *backend-environment
+      PORT: 5106
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   task-service:
     <<: *backend-service
-    command: ["node", "microservices/taskServer.js"]
+    image: comconnect-task-service
+    build:
+      context: .
+      dockerfile: backend/dockerfiles/tasks.Dockerfile
     environment:
       <<: *backend-environment
       PORT: 5103
 
   notification-service:
     <<: *backend-service
-    command: ["node", "microservices/notificationServer.js"]
+    image: comconnect-notification-service
+    build:
+      context: .
+      dockerfile: backend/dockerfiles/notifications.Dockerfile
     environment:
       <<: *backend-environment
       PORT: 5104
@@ -138,7 +170,10 @@ services:
 
   ai-orchestrator:
     <<: *backend-service
-    command: ["node", "microservices/aiOrchestratorServer.js"]
+    image: comconnect-ai-orchestrator
+    build:
+      context: .
+      dockerfile: backend/dockerfiles/ai-orchestrator.Dockerfile
     environment:
       <<: *backend-environment
       PORT: 5105
@@ -184,12 +219,14 @@ services:
       TASK_SERVICE_URL: http://task-service:5103
       NOTIFICATION_SERVICE_URL: http://notification-service:5104
       AI_ORCHESTRATOR_URL: http://ai-orchestrator:5105
+      MESSAGE_WORKER_SERVICE_URL: http://message-worker:5106
     depends_on:
       - identity-service
       - chat-service
       - task-service
       - notification-service
       - ai-orchestrator
+      - message-worker
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5000/health"]
       interval: 15s

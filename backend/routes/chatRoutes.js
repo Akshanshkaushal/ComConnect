@@ -8,10 +8,16 @@ const {
   renameGroup,
 } = require("../controllers/chatControllers");
 const { protect } = require("../middleware/authMiddleware");
+const {
+  getUserPresence,
+  getUsersPresence,
+} = require("../controllers/presenceController");
 
 const router = express.Router();
 
 router.route("/").post(protect, accessChat);
+router.post("/presence", protect, getUsersPresence);
+router.get("/presence/:userId", protect, getUserPresence);
 router.get('/workspace/:workspaceId/chats',protect, fetchChats);
 router.route("/group").post(protect, createGroupChat);
 router.route("/rename").put(protect, renameGroup);

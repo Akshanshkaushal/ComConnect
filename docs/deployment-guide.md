@@ -13,7 +13,7 @@ Create a Render Blueprint from the repository root. Render reads
 `render.yaml` and creates:
 
 - public API gateway
-- private identity, chat, task, notification, and AI orchestrator services
+- private identity, chat, message worker, task, notification, and AI orchestrator services
 - private Flask AI engine with a persistent Chroma disk
 - Redis-compatible Render Key Value
 
@@ -72,7 +72,7 @@ Terraform creates:
 - ECS Fargate cluster and Cloud Map private DNS
 - gateway and internal services
 - ECR repositories
-- ElastiCache Redis
+- Multi-AZ ElastiCache Redis replication group for presence, Socket.IO, and streams
 - Secrets Manager runtime secret
 - CloudWatch logs
 - private S3 frontend bucket

@@ -64,12 +64,21 @@ jobs:
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         run: |
           REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-          docker build -f gateway/Dockerfile -t "$REGISTRY/comconnect-production-gateway:$IMAGE_TAG" .
-          docker build -f backend/Dockerfile -t "$REGISTRY/comconnect-production-backend:$IMAGE_TAG" .
-          docker build -f ai-service/Dockerfile -t "$REGISTRY/comconnect-production-ai-engine:$IMAGE_TAG" .
-          docker push "$REGISTRY/comconnect-production-gateway:$IMAGE_TAG"
-          docker push "$REGISTRY/comconnect-production-backend:$IMAGE_TAG"
-          docker push "$REGISTRY/comconnect-production-ai-engine:$IMAGE_TAG"
+          build_push() {
+            local name="$1"
+            local dockerfile="$2"
+            docker build -f "$dockerfile" -t "$REGISTRY/comconnect-production-$name:$IMAGE_TAG" .
+            docker push "$REGISTRY/comconnect-production-$name:$IMAGE_TAG"
+          }
+
+          build_push gateway gateway/Dockerfile
+          build_push identity backend/dockerfiles/identity.Dockerfile
+          build_push chat backend/dockerfiles/chat.Dockerfile
+          build_push message-worker backend/dockerfiles/message-worker.Dockerfile
+          build_push tasks backend/dockerfiles/tasks.Dockerfile
+          build_push notifications backend/dockerfiles/notifications.Dockerfile
+          build_push ai-orchestrator backend/dockerfiles/ai-orchestrator.Dockerfile
+          build_push ai-engine ai-service/Dockerfile
 
       - name: Apply AWS infrastructure
         working-directory: infra/aws
