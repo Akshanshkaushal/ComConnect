@@ -1,0 +1,46 @@
+name: Deploy Render and Vercel
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-render-vercel
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production-render-vercel
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Deploy frontend to Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
+        run: |
+          npx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx vercel@latest build --prod --token="$VERCEL_TOKEN"
+          npx vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      - name: Trigger Render service deploys
+        env:
+          RENDER_DEPLOY_HOOK_URLS: ${{ secrets.RENDER_DEPLOY_HOOK_URLS }}
+        run: |
+          while IFS= read -r hook; do
+            if [ -n "$hook" ]; then
+              curl --fail --silent --show-error -X POST "$hook"
+            fi
+          done <<< "$RENDER_DEPLOY_HOOK_URLS"

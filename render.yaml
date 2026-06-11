@@ -1,0 +1,230 @@
+services:
+  - type: keyvalue
+    name: comconnect-redis
+    plan: starter
+    region: oregon
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
+
+  - type: web
+    name: comconnect-api
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./gateway/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGIN
+        sync: false
+      - key: IDENTITY_SERVICE_URL
+        value: http://comconnect-identity:5101
+      - key: CHAT_SERVICE_URL
+        value: http://comconnect-chat:5102
+      - key: TASK_SERVICE_URL
+        value: http://comconnect-tasks:5103
+      - key: NOTIFICATION_SERVICE_URL
+        value: http://comconnect-notifications:5104
+      - key: AI_ORCHESTRATOR_URL
+        value: http://comconnect-ai-orchestrator:5105
+
+  - type: pserv
+    name: comconnect-identity
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    dockerCommand: node microservices/identityServer.js
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5101
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: INTERNAL_SERVICE_TOKEN
+        generateValue: true
+      - key: AI_SERVICE_TOKEN
+        generateValue: true
+
+  - type: pserv
+    name: comconnect-chat
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    dockerCommand: node microservices/chatServer.js
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5102
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: MONGO_URI
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: MONGO_URI
+      - key: JWT_SECRET
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: JWT_SECRET
+      - key: INTERNAL_SERVICE_TOKEN
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: INTERNAL_SERVICE_TOKEN
+      - key: NOTIFICATION_SERVICE_URL
+        value: http://comconnect-notifications:5104
+
+  - type: pserv
+    name: comconnect-tasks
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    dockerCommand: node microservices/taskServer.js
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5103
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: MONGO_URI
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: MONGO_URI
+      - key: JWT_SECRET
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: JWT_SECRET
+
+  - type: pserv
+    name: comconnect-notifications
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    dockerCommand: node microservices/notificationServer.js
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5104
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: MONGO_URI
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: MONGO_URI
+      - key: JWT_SECRET
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: JWT_SECRET
+      - key: INTERNAL_SERVICE_TOKEN
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: INTERNAL_SERVICE_TOKEN
+      - key: REDIS_HOST
+        fromService:
+          name: comconnect-redis
+          type: keyvalue
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          name: comconnect-redis
+          type: keyvalue
+          property: port
+      - key: KAFKA_BROKER
+        sync: false
+      - key: KAFKA_SSL
+        value: "true"
+      - key: KAFKA_USERNAME
+        sync: false
+      - key: KAFKA_PASSWORD
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+
+  - type: pserv
+    name: comconnect-ai-orchestrator
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    dockerCommand: node microservices/aiOrchestratorServer.js
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5105
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: MONGO_URI
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: MONGO_URI
+      - key: JWT_SECRET
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: JWT_SECRET
+      - key: AI_SERVICE_TOKEN
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: AI_SERVICE_TOKEN
+      - key: AI_SERVICE_URL
+        value: http://comconnect-ai-engine:5001
+
+  - type: pserv
+    name: comconnect-ai-engine
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./ai-service/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: checksPass
+    disk:
+      name: chroma
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: AI_SERVICE_TOKEN
+        fromService:
+          name: comconnect-identity
+          type: pserv
+          envVarKey: AI_SERVICE_TOKEN
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4.1-mini
+      - key: CHROMA_DIR
+        value: /data/chroma

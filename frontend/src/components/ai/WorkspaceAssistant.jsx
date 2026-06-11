@@ -155,14 +155,15 @@ const WorkspaceAssistant = ({ workspaceId, onTasksCreated }) => {
         onClick={onOpen}
         px={4}
         py={2}
-        height="auto"
-        fontWeight="normal"
-        borderRadius="20px"
+        height="32px"
+        fontWeight="600"
+        borderRadius="6px"
         flexShrink={0}
-        fontSize={{ base: "11px", md: "13px", lg: "14px" }}
-        bg="#21364a54"
-        color="white"
-        _hover={{ bg: "#192a39ff" }}
+        fontSize="sm"
+        bg="#202725"
+        color="#dce6e1"
+        border="1px solid #3a4541"
+        _hover={{ bg: "#2c3532" }}
       >
         AI Assistant
       </Button>

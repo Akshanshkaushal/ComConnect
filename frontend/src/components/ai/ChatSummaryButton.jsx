@@ -81,13 +81,16 @@ const ChatSummaryButton = ({ chatId }) => {
         leftIcon={<FiFileText />}
         onClick={summarize}
         isLoading={loading}
-        bg="#21364A"
-        color="white"
-        borderRadius="12px"
-        _hover={{ bg: "#2982db20" }}
+        bg="#202725"
+        color="#dce6e1"
+        border="1px solid #3a4541"
+        borderRadius="6px"
+        _hover={{ bg: "#2c3532" }}
         fontSize="sm"
       >
-        Summarize Chat
+        <Box as="span" display={{ base: "none", md: "inline" }}>
+          Summarize Chat
+        </Box>
       </Button>
 
       <Modal isOpen={isOpen} onClose={onClose} size="xl" isCentered>

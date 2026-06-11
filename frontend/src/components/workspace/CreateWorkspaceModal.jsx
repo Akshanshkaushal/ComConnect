@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import axios from "axios";
 import emailjs from "emailjs-com";
 import {
@@ -93,7 +93,7 @@ const CreateWorkspaceModal = ({ onClose }) => {
     }
   };
 
-  const fetchRoles = async () => {
+  const fetchRoles = useCallback(async () => {
     try {
       const response = await axios.get(
         `${API_URL}/workspace/${workspaceId}/roles`,
@@ -105,7 +105,7 @@ const CreateWorkspaceModal = ({ onClose }) => {
     } catch (error) {
       console.error("Error fetching roles:", error);
     }
-  };
+  }, [token, workspaceId]);
 
   const sendInvitation = (email, role) => {
     const templateParams = {
@@ -174,7 +174,7 @@ const CreateWorkspaceModal = ({ onClose }) => {
     if (step === 2 && workspaceId) {
       fetchRoles();
     }
-  }, [step, workspaceId]);
+  }, [step, workspaceId, fetchRoles]);
 
   const handleDone = () => {
     setIsOpen(false);

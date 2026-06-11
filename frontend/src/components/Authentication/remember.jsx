@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Box, Checkbox, FormControl } from "@chakra-ui/react";
-import TextBox from "../Elements/text_box";
 
 const RememberMe = () => {
 

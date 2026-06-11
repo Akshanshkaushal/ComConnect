@@ -1,4 +1,3 @@
-import { ViewIcon } from "@chakra-ui/icons";
 import {
   Modal,
   ModalOverlay,
@@ -13,7 +12,6 @@ import {
   Input,
   useToast,
   Box,
-  IconButton,
   Spinner,
   Text,
 } from "@chakra-ui/react";

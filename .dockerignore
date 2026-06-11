@@ -1,8 +1,12 @@
 node_modules
+**/node_modules
+**/__pycache__
+**/*.pyc
 npm-debug.log
 build
+**/build
 .git
 .gitignore
 .env
 *.md
-.DS_Store 
+.DS_Store

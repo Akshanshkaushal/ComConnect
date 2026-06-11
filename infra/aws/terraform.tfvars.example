@@ -1,0 +1,11 @@
+aws_region                    = "us-east-1"
+environment                   = "production"
+image_tag                     = "latest"
+desired_count                 = 1
+mongo_uri                     = "mongodb+srv://user:password@cluster.example/comconnect"
+kafka_broker                  = "broker.example:9092"
+kafka_username                = "replace-me"
+kafka_password                = "replace-me"
+openai_api_key                = "replace-me"
+firebase_service_account_json = "{\"type\":\"service_account\"}"
+cors_origin                   = "*"

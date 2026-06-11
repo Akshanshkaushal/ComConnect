@@ -1,3 +1,34 @@
+x-backend-environment: &backend-environment
+  NODE_ENV: development
+  CORS_ORIGIN: http://localhost:3000,http://127.0.0.1:3000
+  MONGO_URI: ${MONGO_URI:-mongodb://admin:admin123@mongodb:27017/comconnect?authSource=admin}
+  DB_USERNAME: ${DB_USERNAME:-admin}
+  DB_PASSWORD: ${DB_PASSWORD:-admin123}
+  JWT_SECRET: ${JWT_SECRET:-local-development-secret}
+  INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-local-internal-token}
+  AI_SERVICE_URL: http://ai-service:5001
+  AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-local-ai-service-token}
+  NOTIFICATION_SERVICE_URL: http://notification-service:5104
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  KAFKA_BROKER: kafka:9092
+  KAFKA_CLIENT_ID: notification-service
+  KAFKA_GROUP_ID: notification-workers
+  FIREBASE_SERVICE_ACCOUNT_PATH: ${FIREBASE_SERVICE_ACCOUNT_PATH:-}
+  FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+
+x-backend-service: &backend-service
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  restart: unless-stopped
+  environment: *backend-environment
+  networks:
+    - app_network
+  depends_on:
+    mongodb:
+      condition: service_healthy
+
 services:
   mongodb:
     image: mongo:7
@@ -9,97 +40,161 @@ services:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     networks:
       - app_network
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.1
+    restart: unless-stopped
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
     networks:
       - app_network
 
   kafka:
     image: confluentinc/cp-kafka:7.4.1
+    restart: unless-stopped
     depends_on:
       - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     ports:
-      - "9092:9092"
       - "29092:29092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
     networks:
       - app_network
 
   redis:
-    image: redis:7
-    command: ["redis-server", "--appendonly", "no"]
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
     networks:
       - app_network
 
-  backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    ports:
-      - "5000:5000"
-    networks:
-      - app_network
+  identity-service:
+    <<: *backend-service
+    command: ["node", "microservices/identityServer.js"]
     environment:
-      - NODE_ENV=development
-      - KAFKA_BROKER=kafka:9092
-      - KAFKA_CLIENT_ID=notification-service
-      - KAFKA_GROUP_ID=notification-group
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - MONGO_URI=${MONGO_URI:-mongodb://admin:admin123@mongodb:27017/comconnect?authSource=admin}
-      - DB_USERNAME=${DB_USERNAME:-admin}
-      - DB_PASSWORD=${DB_PASSWORD:-admin123}
-      - JWT_SECRET=${JWT_SECRET:-change-me}
-      - AI_SERVICE_URL=http://ai-service:5001
-      - AI_SERVICE_TOKEN=${AI_SERVICE_TOKEN:-local-ai-service-token}
-      - FIREBASE_SERVICE_ACCOUNT_PATH=${FIREBASE_SERVICE_ACCOUNT_PATH:-}
-      - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON:-}
-    volumes:
-      - ./backend:/app/backend
-      - /app/backend/node_modules
-      - ./.env:/app/backend/.env
+      <<: *backend-environment
+      PORT: 5101
+
+  chat-service:
+    <<: *backend-service
+    command: ["node", "microservices/chatServer.js"]
+    environment:
+      <<: *backend-environment
+      PORT: 5102
     depends_on:
-      - kafka
-      - redis
-      - mongodb
-      - ai-service
+      mongodb:
+        condition: service_healthy
+      notification-service:
+        condition: service_started
+
+  task-service:
+    <<: *backend-service
+    command: ["node", "microservices/taskServer.js"]
+    environment:
+      <<: *backend-environment
+      PORT: 5103
+
+  notification-service:
+    <<: *backend-service
+    command: ["node", "microservices/notificationServer.js"]
+    environment:
+      <<: *backend-environment
+      PORT: 5104
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  ai-orchestrator:
+    <<: *backend-service
+    command: ["node", "microservices/aiOrchestratorServer.js"]
+    environment:
+      <<: *backend-environment
+      PORT: 5105
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
 
   ai-service:
     build:
       context: .
       dockerfile: ai-service/Dockerfile
     restart: unless-stopped
-    ports:
-      - "5001:5001"
     environment:
-      - AI_SERVICE_TOKEN=${AI_SERVICE_TOKEN:-local-ai-service-token}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4.1-mini}
-      - CHROMA_DIR=/data/chroma
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-local-ai-service-token}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      CHROMA_DIR: /data/chroma
     volumes:
-      - ./ai-service:/app
       - chroma_data:/data/chroma
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app_network
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+      NODE_ENV: development
+      CORS_ORIGIN: http://localhost:3000,http://127.0.0.1:3000
+      IDENTITY_SERVICE_URL: http://identity-service:5101
+      CHAT_SERVICE_URL: http://chat-service:5102
+      TASK_SERVICE_URL: http://task-service:5103
+      NOTIFICATION_SERVICE_URL: http://notification-service:5104
+      AI_ORCHESTRATOR_URL: http://ai-orchestrator:5105
+    depends_on:
+      - identity-service
+      - chat-service
+      - task-service
+      - notification-service
+      - ai-orchestrator
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     networks:
       - app_network
 
@@ -107,20 +202,19 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+    restart: unless-stopped
     ports:
       - "3000:3000"
+    environment:
+      REACT_APP_API_URL: http://localhost:5000
+      REACT_APP_SOCKET_URL: http://localhost:5000
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
     depends_on:
-      - backend
+      api-gateway:
+        condition: service_healthy
     networks:
       - app_network
-    environment:
-      - REACT_APP_API_URL=http://localhost:5000
-      - REACT_APP_SOCKET_URL=http://localhost:5000
-      - CHOKIDAR_USEPOLLING=true
-      - WATCHPACK_POLLING=true
-    volumes:
-      - ./frontend/src:/app/frontend/src
-      - ./frontend/public:/app/frontend/public
 
 networks:
   app_network:
@@ -128,4 +222,5 @@ networks:
 
 volumes:
   mongodb_data:
+  redis_data:
   chroma_data:

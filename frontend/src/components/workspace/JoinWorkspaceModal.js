@@ -12,8 +12,6 @@ import {
   Button,
   useDisclosure,
   VStack,
-  Text,
-  Box,
   useToast,
 } from "@chakra-ui/react";
 import axios from "axios";
@@ -137,7 +135,7 @@ const JoinWorkspaceModal = ({ children }) => {
                   onChange={(e) => setWorkspaceId(e.target.value)}
                   bg="#0F1924"
                   borderColor="#2982db20"
-                  col or="white"
+                  color="white"
                   _placeholder={{ color: "gray.400" }}
                   _hover={{ borderColor: "#2982db40" }}
                   _focus={{

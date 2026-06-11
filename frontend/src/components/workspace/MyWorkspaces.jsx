@@ -1,29 +1,22 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   Box,
   Grid,
   Text,
   Button,
   Flex,
-  Spinner,
   Avatar,
   AvatarGroup,
-  useToast,
-  Icon,
   HStack,
   VStack,
 } from "@chakra-ui/react";
 import { useWorkspace } from "../../Context/WorkspaceProvider";
 import { useNavigate } from "react-router-dom";
 import { ArrowBackIcon } from "@chakra-ui/icons";
-import axios from "axios";
-import { API_URL } from "../../config/api.config";
 
 const MyWorkspaces = () => {
-  const { userWorkspaces, user } = useWorkspace();
-  const [loading, setLoading] = useState(false);
+  const { userWorkspaces } = useWorkspace();
   const navigate = useNavigate();
-  const toast = useToast();
 
   const handleSelectWorkspace = (workspace) => {
     navigate(`/workspace/${workspace._id}/chats`);
@@ -32,20 +25,6 @@ const MyWorkspaces = () => {
   const handleBackToSelection = () => {
     navigate("/workspace");
   };
-
-  if (loading) {
-    return (
-      <Flex
-        minHeight="100vh"
-        width="100%"
-        align="center"
-        justify="center"
-        bg="#0f1924"
-      >
-        <Spinner size="xl" color="white" />
-      </Flex>
-    );
-  }
 
   return (
     <Flex

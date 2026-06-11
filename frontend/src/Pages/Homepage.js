@@ -1,110 +1,87 @@
-import { Box, TabPanel, TabPanels, Tabs, Text } from "@chakra-ui/react";
-import { useEffect, useState } from "react"; // Import useState
+import { Box, Button, Flex, HStack, Text } from "@chakra-ui/react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Login from "../components/Authentication/Login";
-import Signup from "../components/Authentication/Signup"; // Import Signup component
-import "./home.css";
-import BackgroundComponent from "../components/Elements/background";
-import TextBox from "../components/Elements/text_box";
-import { Flex } from "@chakra-ui/react";
+import Signup from "../components/Authentication/Signup";
 
 function Homepage() {
   const navigate = useNavigate();
-  const [isSignup, setIsSignup] = useState(false); // State to track if it's signup
+  const [mode, setMode] = useState("login");
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("userInfo"));
-
-    if (user) navigate("/workspace");
+    if (JSON.parse(localStorage.getItem("userInfo"))) {
+      navigate("/workspace");
+    }
   }, [navigate]);
 
   return (
-    <Flex
-      minHeight="100vh"
-      width="100%"
-      align="center"
-      justify="center"
-      bg="#0f1924"
-    >
-      <Box
-        bg="#1b3046ff"
-        width={["90%", "90%", "90%", "70%"]}
-        p={8}
-        borderRadius="lg"
-        boxShadow="lg"
+    <Flex minH="100dvh" bg="#101414" direction="column">
+      <Flex
+        as="header"
+        h="68px"
+        px={{ base: 5, md: 8 }}
+        align="center"
+        justify="space-between"
+        borderBottom="1px solid #313b37"
       >
-        <Box width="100%" className="container">
-          <Box
-            className="left-box"
-            flex="1"
-            display="flex"
-            flexDirection="column"
-            bottom="0px"
+        <HStack spacing={3}>
+          <Flex
+            w="34px"
+            h="34px"
+            align="center"
+            justify="center"
+            borderRadius="6px"
+            bg="#34d399"
+            color="#07120e"
+            fontWeight="800"
           >
-            <Box position="relative" mb="0px">
-              {!isSignup ? (
-                <>
-                  <Text
-                    fontFamily="Inter"
-                    fontWeight="700"
-                    // lineHeight={{ base: "40px", md: "55px", lg: "66.65px" }}
-                    fontSize={{ base: "24px", md: "34px" }}
-                    textAlign="left"
-                    color="#FAFAFC"
-                    mb={{ base: "4px", md: "6px", lg: "8px" }}
-                    mt={"0px"}
-                  >
-                    Hey, Welcome Back!
-                  </Text>
-                  <Box position="relative" mt="0px">
-                    <TextBox children="We are very happy to see you again!" />
-                  </Box>
-                </>
-              ) : (
-                <>
-                  <Text
-                    fontFamily="Inter"
-                    fontWeight="700"
-                    // lineHeight={{ base: "40px", md: "55px", lg: "66.65px" }}
-                    fontSize={{ base: "24px", md: "34px" }}
-                    textAlign="left"
-                    color="#FAFAFC"
-                    mb={{ base: "4px", md: "6px", lg: "8px" }}
-                    mt={"0px"}
-                  >
-                    Welcome to ComConnect!
-                  </Text>
-                  <Box position="relative" mt="0px">
-                    <TextBox children="Connect. Communicate. Collaborate." />
-                  </Box>
-                </>
-              )}
-            </Box>
+            C
+          </Flex>
+          <Text fontWeight="750" fontSize="lg">
+            ComConnect
+          </Text>
+        </HStack>
+        <Text display={{ base: "none", md: "block" }} color="#8f9d97" fontSize="sm">
+          Events, conversations, and tasks in one workspace
+        </Text>
+      </Flex>
 
-            <Tabs isFitted variant="soft-rounded">
-              <TabPanels>
-                <TabPanel>{isSignup ? <Signup /> : <Login />}</TabPanel>
-              </TabPanels>
-            </Tabs>
+      <Flex flex="1" align="center" justify="center" px={4} py={10}>
+        <Box w="100%" maxW="460px">
+          <Text fontSize="2xl" fontWeight="750">
+            {mode === "login" ? "Welcome back" : "Create your account"}
+          </Text>
+          <Text color="#9eaaa5" fontSize="sm" mt={2} mb={6}>
+            {mode === "login"
+              ? "Sign in to continue planning with your workspace."
+              : "Join your team and keep every event detail moving."}
+          </Text>
 
-            <Box display="flex" justifyContent="center">
-              <TextBox>
-                {isSignup
-                  ? "Already have an account? "
-                  : "Don’t have an account? "}
-                <Box
-                  as="button"
-                  color="blue.500"
-                  onClick={() => setIsSignup(!isSignup)} // Toggle the state
-                >
-                  {isSignup ? "Login" : "Sign Up"}{" "}
-                  {/* Text changes based on the state */}
-                </Box>
-              </TextBox>
-            </Box>
-          </Box>
+          <Flex
+            p="3px"
+            bg="#171c1b"
+            border="1px solid #313b37"
+            borderRadius="6px"
+            mb={6}
+          >
+            {["login", "signup"].map((item) => (
+              <Button
+                key={item}
+                flex="1"
+                size="sm"
+                bg={mode === item ? "#2c3532" : "transparent"}
+                color={mode === item ? "#eef4f1" : "#8f9d97"}
+                _hover={{ bg: "#202725" }}
+                onClick={() => setMode(item)}
+              >
+                {item === "login" ? "Sign in" : "Create account"}
+              </Button>
+            ))}
+          </Flex>
+
+          {mode === "login" ? <Login /> : <Signup />}
         </Box>
-      </Box>
+      </Flex>
     </Flex>
   );
 }

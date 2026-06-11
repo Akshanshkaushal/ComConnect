@@ -1,0 +1,211 @@
+openapi: 3.0.3
+info:
+  title: ComConnect API
+  version: 2.0.0
+  description: Public API gateway for workspaces, real-time chat, tasks, notifications, and AI agents.
+servers:
+  - url: /
+    description: Current deployment
+tags:
+  - name: Identity
+  - name: Workspaces
+  - name: Chat
+  - name: Tasks
+  - name: AI
+  - name: Notifications
+paths:
+  /api/user:
+    post:
+      tags: [Identity]
+      summary: Register a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCredentials"
+      responses:
+        "201":
+          description: User created
+    get:
+      tags: [Identity]
+      summary: Search users
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Users
+  /api/user/login:
+    post:
+      tags: [Identity]
+      summary: Authenticate a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCredentials"
+      responses:
+        "200":
+          description: JWT and user profile
+  /api/workspace:
+    post:
+      tags: [Workspaces]
+      summary: Create a workspace
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201":
+          description: Workspace created
+  /api/workspace/user:
+    get:
+      tags: [Workspaces]
+      summary: List the current user's workspaces
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Workspaces
+  /api/workspace/join:
+    post:
+      tags: [Workspaces]
+      summary: Join a workspace
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Joined workspace
+  /api/chat/workspace/{workspaceId}/chats:
+    get:
+      tags: [Chat]
+      summary: List chats in a workspace
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "200":
+          description: Chats
+  /api/message/{chatId}:
+    get:
+      tags: [Chat]
+      summary: Get chat messages
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Messages
+  /api/message:
+    post:
+      tags: [Chat]
+      summary: Send a message
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chatId, content]
+              properties:
+                chatId: { type: string }
+                content: { type: string }
+      responses:
+        "201":
+          description: Message created
+  /api/tasks/allocate:
+    post:
+      tags: [Tasks]
+      summary: Allocate a workspace task
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201":
+          description: Task allocated
+  /api/tasks/my-tasks:
+    get:
+      tags: [Tasks]
+      summary: List tasks assigned to the current user
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Tasks
+  /api/ai/workspaces/{workspaceId}/sync:
+    post:
+      tags: [AI]
+      summary: Index workspace knowledge in the vector store
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "200":
+          description: Workspace indexed
+  /api/ai/workspaces/{workspaceId}/ask:
+    post:
+      tags: [AI]
+      summary: Ask the workspace-scoped RAG assistant
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "200":
+          description: Grounded answer and citations
+  /api/ai/workspaces/{workspaceId}/task-plan:
+    post:
+      tags: [AI]
+      summary: Create a structured task plan
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "200":
+          description: Proposed task plan
+  /api/ai/workspaces/{workspaceId}/event-coordinator:
+    post:
+      tags: [AI]
+      summary: Analyze event readiness, blockers, workload, and follow-ups
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "200":
+          description: Event coordination report
+  /api/ai/chats/{chatId}/summary:
+    post:
+      tags: [AI]
+      summary: Summarize a group chat
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Summary, actions, questions, people, and deadlines
+  /api/notification/token:
+    post:
+      tags: [Notifications]
+      summary: Register an FCM token
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Token registered
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    WorkspaceId:
+      name: workspaceId
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    UserCredentials:
+      type: object
+      required: [email, password]
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        password: { type: string, format: password }

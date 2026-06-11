@@ -30,6 +30,7 @@ const allocateTask = asyncHandler(async (req, res) => {
     attachments,
     createdBy: req.user._id,
   });
+  await task.populate("assignee createdBy", "name email pic");
   res.status(201).json(task);
 });
 
@@ -39,7 +40,12 @@ const getMyTasks = asyncHandler(async (req, res) => {
     await getWorkspaceForMember(req.query.workspaceId, req.user._id);
     query.workspace = req.query.workspaceId;
   }
-  res.json(await Task.find(query));
+  res.json(
+    await Task.find(query)
+      .populate("assignee createdBy", "name email pic")
+      .populate("comments.user", "name email pic")
+      .sort({ createdAt: -1 })
+  );
 });
 
 const getAllocatedTasks = asyncHandler(async (req, res) => {
@@ -48,10 +54,19 @@ const getAllocatedTasks = asyncHandler(async (req, res) => {
     await getWorkspaceForMember(req.query.workspaceId, req.user._id);
     query.workspace = req.query.workspaceId;
   }
-  res.json(await Task.find(query));
+  res.json(
+    await Task.find(query)
+      .populate("assignee createdBy", "name email pic")
+      .populate("comments.user", "name email pic")
+      .sort({ createdAt: -1 })
+  );
 });
 
 const updateTaskStatus = asyncHandler(async (req, res) => {
+  if (!["to-do", "in-progress", "done"].includes(req.body.status)) {
+    res.status(400);
+    throw new Error("Invalid task status");
+  }
   const task = await Task.findById(req.body.taskId);
   if (!task) {
     res.status(404);
@@ -71,13 +86,25 @@ const updateTaskStatus = asyncHandler(async (req, res) => {
 });
 
 const addComment = asyncHandler(async (req, res) => {
+  if (!req.body.comment?.trim()) {
+    res.status(400);
+    throw new Error("Comment is required");
+  }
   const task = await Task.findById(req.body.taskId);
   if (!task) {
     res.status(404);
     throw new Error("Task not found");
   }
 
-  task.comments.push({ user: req.user._id, comment: req.body.comment });
+  if (
+    task.assignee.toString() !== req.user._id.toString() &&
+    task.createdBy.toString() !== req.user._id.toString()
+  ) {
+    res.status(403);
+    throw new Error("You do not have permission to comment on this task");
+  }
+
+  task.comments.push({ user: req.user._id, comment: req.body.comment.trim() });
   await task.save();
   res.json(task);
 });

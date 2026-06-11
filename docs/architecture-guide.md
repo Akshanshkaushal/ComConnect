@@ -1,324 +1,377 @@
-# ComConnect Architecture Guide
+# ComConnect Production Architecture
 
-This guide explains how ComConnect works end to end: the frontend, backend,
-data stores, real-time chat, notifications, workspace task management, and the
-LangChain-powered workspace AI assistant, chat summarizer, and event
-coordinator agent.
+This guide describes the implemented ComConnect architecture, the interaction
+between components, and the operational model for local, Render/Vercel, and AWS
+deployments.
 
-## 1. System Overview
+## 1. Architecture Goals
 
-ComConnect is a workspace collaboration and event-organization application. A
-user creates or joins a workspace, communicates in workspace chats, allocates
-tasks, tracks status, receives notifications, and can ask an AI assistant to
-summarize workspace knowledge or draft task plans.
+ComConnect is an event collaboration application with:
+
+- workspace membership and roles
+- group and direct chat over REST and Socket.IO
+- task allocation and status tracking
+- Kafka-backed push notification delivery
+- workspace-scoped retrieval augmented generation (RAG)
+- an approval-gated task planning agent
+- group chat summarization
+- an event coordinator agent
+
+The codebase uses independently deployable services without duplicating models
+and controller logic. The Node services currently share one MongoDB cluster,
+but each service owns a bounded API and can be scaled or deployed separately.
+
+## 2. Complete System Diagram
 
 ```mermaid
 flowchart LR
-  User["User Browser"] --> Frontend["React Frontend"]
-  Frontend --> Backend["Express API + Socket.IO"]
-  Backend --> MongoDB["MongoDB"]
-  Backend --> Redis["Redis"]
-  Backend --> Kafka["Kafka"]
-  Backend --> Firebase["Firebase Admin"]
-  Backend --> AIProxy["Backend AI Controller"]
-  AIProxy --> AIService["Flask LangChain AI Service"]
-  AIService --> Chroma["Chroma Vector Store"]
-  AIService --> OpenAI["OpenAI Model + Embeddings"]
+  Browser["React Client"] --> Edge["CDN / Vercel / CloudFront"]
+  Edge --> Gateway["API Gateway<br/>REST, WebSocket proxy, rate limit, Swagger"]
+
+  Gateway --> Identity["Identity Service<br/>users, workspaces, roles"]
+  Gateway --> Chat["Chat Service<br/>messages, groups, Socket.IO"]
+  Gateway --> Tasks["Task Service<br/>allocation, status, comments"]
+  Gateway --> Notify["Notification Service<br/>FCM, Kafka consumer, tokens"]
+  Gateway --> AIAPI["AI Orchestrator<br/>authorization, context assembly, approvals"]
+
+  Identity --> Mongo[("MongoDB")]
+  Chat --> Mongo
+  Tasks --> Mongo
+  Notify --> Mongo
+  AIAPI --> Mongo
+
+  Chat -->|"internal authenticated request"| Notify
+  Notify --> Kafka[("Kafka")]
+  Notify --> Redis[("Redis")]
+  Notify --> Firebase["Firebase Cloud Messaging"]
+
+  AIAPI --> AIEngine["Flask + LangChain AI Engine"]
+  AIEngine --> Chroma[("Chroma Vector DB<br/>collection per workspace")]
+  AIEngine --> Embeddings["Embedding Model"]
+  AIEngine --> LLM["Chat Model"]
+
+  AIEngine --> RAG["Workspace RAG Assistant"]
+  AIEngine --> Planner["Task Planning Agent"]
+  AIEngine --> Summary["Chat Summarizer"]
+  AIEngine --> Coordinator["Event Coordinator Agent"]
 ```
 
-The main design choice is that the Flask AI service is not trusted with user
-identity. Express remains the security gateway: it authenticates users, checks
-workspace membership, gathers only allowed workspace data, and calls the
-internal AI service.
+Only the API gateway is public. Internal services are addressed by service name
+on the Docker, Render private, or AWS Cloud Map network.
 
-## 2. Runtime Containers
+## 3. Service Catalog
 
-The Docker Compose stack includes:
+| Service | Local port | Responsibilities | Primary dependencies |
+| --- | ---: | --- | --- |
+| API gateway | 5000 | Routing, rate limiting, CORS, security headers, Swagger, WebSocket forwarding, aggregate health | All internal services |
+| Identity service | 5101 | Registration, login, users, workspaces, membership, roles | MongoDB |
+| Chat service | 5102 | Chats, messages, groups, Socket.IO rooms and broadcasts | MongoDB, notification service |
+| Task service | 5103 | Task assignment, status, comments, workspace task queries | MongoDB |
+| Notification service | 5104 | FCM tokens, Kafka producer/consumer, Redis token cache, push delivery | MongoDB, Redis, Kafka, Firebase |
+| AI orchestrator | 5105 | JWT and workspace authorization, source document assembly, task-plan approvals | MongoDB, AI engine |
+| AI engine | 5001 | LangChain chains, RAG retrieval, structured AI outputs | Chroma, embedding model, chat model |
+| Frontend | 3000 | Responsive workspace, chat, task, RAG, planner, summary, and coordinator UI | API gateway |
 
-- `frontend`: React app on port `3000`.
-- `backend`: Express, REST API, Socket.IO, task allocation, notifications, and
-  AI gateway on port `5000`.
-- `ai-service`: Flask, LangChain, OpenAI, and Chroma-backed RAG on port `5001`.
-- `mongodb`: local MongoDB for users, workspaces, chats, messages, and tasks.
-- `redis`: notification/cache support.
-- `zookeeper` and `kafka`: event streaming infrastructure for notifications.
+Service entry points live in `backend/microservices`. `backend/server.js` remains
+a compact all-in-one compatibility process for direct development, while Docker
+Compose and production deployments run the bounded services.
 
-Persistent volumes:
+## 4. Gateway Contract
 
-- `mongodb_data`: MongoDB data.
-- `chroma_data`: AI vector index storage.
+The gateway maps public paths to internal services:
 
-## 3. Frontend Components
+```js
+addProxy("/api/user", services.identity);
+addProxy("/api/workspace", services.identity);
+addProxy("/api/chat", services.chat);
+addProxy("/api/message", services.chat);
+addProxy("/api/tasks", services.tasks);
+addProxy("/api/notification", services.notifications);
+addProxy("/api/ai", services.ai);
+```
+
+Socket.IO traffic on `/socket.io` is forwarded to the chat service with upgrade
+support. Swagger UI is available at `/api-docs`, and the machine-readable
+contract is available at `/openapi.json`.
+
+Operational endpoints:
+
+```text
+GET /health
+GET /health/services
+GET /api-docs
+GET /openapi.json
+```
+
+## 5. Authentication and Trust Boundaries
 
 ```mermaid
-flowchart TD
-  App["App.js Routes"] --> WorkspaceProvider["WorkspaceProvider"]
-  App --> ChatProvider["ChatProvider"]
-  App --> SocketProvider["SocketProvider"]
-  App --> WorkspaceSelection["WorkspaceSelection"]
-  App --> Chatpage["Chatpage"]
-  Chatpage --> MyChats["MyChats Sidebar"]
-  Chatpage --> Chatbox["Chatbox"]
-  Chatbox --> SingleChat["SingleChat"]
-  MyChats --> WorkspaceAssistant["WorkspaceAssistant"]
-  App --> TaskAllocatorPage["TaskAllocatorPage"]
-  TaskAllocatorPage --> TaskAllocator["TaskAllocator"]
+sequenceDiagram
+  participant U as Browser
+  participant G as API Gateway
+  participant S as Internal Service
+  participant DB as MongoDB
+  participant AI as AI Engine
+
+  U->>G: Request with Bearer JWT
+  G->>S: Forward request and request ID
+  S->>S: Verify JWT
+  S->>DB: Verify user and workspace access
+  opt AI request
+    S->>AI: X-Service-Token + authorized data
+    AI-->>S: Structured AI response
+  end
+  S-->>G: API response
+  G-->>U: API response
 ```
 
-Key frontend responsibilities:
+Important boundaries:
 
-- `WorkspaceSelection`: create, join, and navigate to workspaces.
-- `MyChats`: lists workspace chats and provides navigation to tasks, map, and
-  the AI assistant and event coordinator.
-- `SingleChat`: loads messages, sends messages, handles typing state, opens the
-  manual task allocation dialog, and shows `Summarize Chat` for group chats.
-- `WorkspaceAssistant`: modal with two modes:
-  - Ask Workspace: sends a question to `/api/ai/workspaces/:id/ask`.
-  - Plan Tasks: generates a proposed task plan and applies it only after user
-    approval.
-- `TaskAllocator`: creates manual tasks and shows task status grouped by state.
+- The browser never calls the Flask AI engine directly.
+- The AI engine receives authorized workspace data, not database credentials.
+- Chat-to-notification calls require `X-Service-Token`.
+- AI task plans cannot write to MongoDB. A signed approval token must be
+  returned by the browser before the orchestrator creates tasks.
+- Destructive `deleteAll` development routes are not exposed.
 
-## 4. Backend Components
+## 6. Chat and WebSocket Workflow
 
 ```mermaid
-flowchart TD
-  Routes["Express Routes"] --> Auth["authMiddleware.protect"]
-  Routes --> ChatControllers["chatControllers"]
-  Routes --> MessageControllers["messageControllers"]
-  Routes --> TaskControllers["taskController"]
-  Routes --> WorkspaceControllers["workspaceControllers"]
-  Routes --> AIControllers["aiControllers"]
-  AIControllers --> WorkspaceAccess["workspaceAccessService"]
-  AIControllers --> KnowledgeBuilder["workspaceKnowledgeService"]
-  AIControllers --> AIClient["aiServiceClient"]
-  AIClient --> Flask["Flask AI Service"]
+sequenceDiagram
+  participant A as Sender
+  participant G as Gateway
+  participant C as Chat Service
+  participant DB as MongoDB
+  participant N as Notification Service
+  participant K as Kafka
+  participant B as Recipient
+
+  A->>G: POST /api/message
+  G->>C: Forward authenticated request
+  C->>DB: Create message and update latestMessage
+  C-->>A: 201 saved message
+  C->>N: POST /internal/notifications/chat-message
+  N->>K: Publish chat-notifications event
+  K-->>N: Consumer receives event
+  N-->>B: Firebase push notification
+  A->>G: Socket.IO "new message"
+  G->>C: WebSocket upgrade/proxy
+  C-->>B: "message recieved" event
 ```
 
-Important backend modules:
+The Kafka producer and consumer use the same configurable topic,
+`chat-notifications`. If Kafka is unavailable, notification delivery falls
+back to direct FCM delivery. Redis stores FCM tokens under
+`user:{userId}:fcmToken`.
 
-- `authMiddleware.js`: validates JWT and attaches `req.user`.
-- `workspaceAccessService.js`: verifies that a user belongs to the requested
-  workspace.
-- `taskController.js`: creates and updates tasks, scoped by workspace.
-- `workspaceKnowledgeService.js`: builds RAG documents from workspace metadata,
-  chat messages, and tasks.
-- `aiServiceClient.js`: calls the Flask service with the internal
-  `X-Service-Token`.
-- `aiControllers.js`: owns workspace/chat authorization, index refresh, AI ask
-  flow, task-plan generation, task-plan approval, chat summaries, and event
-  coordinator reports.
+## 7. Workspace-Scoped RAG
 
-## 5. Data Model
+### Sources
 
-Core collections:
+The orchestrator builds documents from:
 
-- `User`: name, email, password hash, profile image, workspaces, FCM token.
-- `Workspace`: name, creator, roles, users, associated group chats.
-- `Chat`: users, group/admin info, latest message, associated workspace.
-- `Message`: sender, content, chat, read status.
-- `Task`: heading, description, assignee, creator, workspace, status, priority,
-  comments, attachments.
+- workspace name and roles
+- workspace chat messages and sender names
+- task titles, descriptions, assignees, status, priority, and comments
+- attachments can be added later by converting supported files to documents
 
-The new `workspace` field on `Task` is important. It allows RAG, task lists,
-and AI-generated task creation to remain scoped to one workspace.
+MongoDB remains the business source of truth. Embeddings are stored in Chroma,
+not MongoDB.
 
-## 6. Chat Flow
+### Indexing
+
+```mermaid
+sequenceDiagram
+  participant O as AI Orchestrator
+  participant DB as MongoDB
+  participant F as Flask AI Engine
+  participant E as Embedding Model
+  participant V as Chroma
+
+  O->>DB: Load authorized workspace data
+  O->>O: Normalize records into documents
+  O->>F: POST /v1/workspaces/:id/index
+  F->>E: Embed document chunks
+  E-->>F: Dense vectors
+  F->>V: Replace workspace collection documents
+  V-->>F: Index complete
+  F-->>O: Document count and status
+```
+
+One Chroma collection is created per workspace. Metadata includes the source
+type, source ID, and display label. This prevents the retriever for workspace A
+from searching workspace B.
+
+Example document:
+
+```json
+{
+  "id": "task-665f...",
+  "content": "Task: Confirm venue booking\nStatus: to-do\nAssignee: Priya",
+  "metadata": {
+    "type": "task",
+    "source_id": "665f...",
+    "label": "Confirm venue booking"
+  }
+}
+```
+
+### Query and Answer
 
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant FE as React Frontend
-  participant API as Express API
-  participant DB as MongoDB
-  participant S as Socket.IO
-  participant N as Notification Service
+  participant O as AI Orchestrator
+  participant F as Flask AI Engine
+  participant V as Chroma
+  participant L as Chat Model
 
-  U->>FE: Type message
-  FE->>API: POST /api/message
-  API->>DB: Create Message
-  API->>DB: Update Chat.latestMessage
-  API->>N: Send or queue notifications
-  API-->>FE: Saved message
-  FE->>S: emit "new message"
-  S-->>Other Users: emit "message recieved"
+  U->>O: Ask workspace question
+  O->>O: Verify membership and refresh changed index
+  O->>F: POST /v1/workspaces/:id/ask
+  F->>V: Embed query and similarity search
+  V-->>F: Relevant workspace documents
+  F->>L: System rules + context + question
+  L-->>F: Grounded answer
+  F-->>O: Answer and source metadata
+  O-->>U: Answer and citations
 ```
 
-The persisted message becomes part of the workspace knowledge base the next
-time the assistant syncs or answers a question.
+The prompt treats retrieved messages and tasks as untrusted content and asks the
+model to answer only from retrieved evidence.
 
-## 7. Manual Task Flow
+## 8. Task Planning Agent
+
+The planner accepts a goal such as "Plan the registration desk setup" and
+returns validated structured tasks.
 
 ```mermaid
 sequenceDiagram
-  participant FE as React Frontend
-  participant API as Express API
-  participant W as WorkspaceAccessService
+  participant U as User
+  participant O as AI Orchestrator
+  participant P as LangChain Planner
   participant DB as MongoDB
 
-  FE->>API: POST /api/tasks/allocate
-  API->>W: Verify creator is workspace member
-  API->>DB: Find assignee by email
-  API->>API: Verify assignee is workspace member
-  API->>DB: Create Task with workspace id
-  API-->>FE: Created task
+  U->>O: Request task plan
+  O->>DB: Verify workspace and load members
+  O->>P: Goal + member list + workspace context
+  P-->>O: Validated TaskPlan JSON
+  O-->>U: Proposal + signed approval token
+  U->>O: Apply approval token
+  O->>O: Verify signature, user, workspace, and expiry
+  O->>DB: Verify assignees and insert tasks
+  O-->>U: Created tasks
 ```
 
-Task queries accept `workspaceId` and check membership before returning scoped
-results.
+The Pydantic schema limits output size and requires task fields. The agent can
+propose work but cannot claim it created or completed work.
 
-## 8. RAG Assistant Flow
+## 9. Chat Summarizer
 
-```mermaid
-sequenceDiagram
-  participant FE as WorkspaceAssistant
-  participant API as Express AI Controller
-  participant DB as MongoDB
-  participant AI as Flask LangChain Service
-  participant VDB as Chroma
-  participant LLM as OpenAI
+The `Summarize Chat` control is available in group chat headers. The output is
+structured as:
 
-  FE->>API: POST /api/ai/workspaces/:id/ask
-  API->>API: Validate JWT
-  API->>DB: Verify workspace membership
-  API->>DB: Load workspace chats, messages, tasks
-  API->>AI: POST /v1/workspaces/:id/index
-  AI->>VDB: Replace workspace vector documents
-  API->>AI: POST /v1/workspaces/:id/ask
-  AI->>VDB: Similarity search
-  AI->>LLM: Answer from retrieved context
-  AI-->>API: Answer + sources
-  API-->>FE: Answer + source labels
+```json
+{
+  "short_summary": "The team confirmed the venue and discussed catering.",
+  "action_items": ["Asha will confirm the final menu."],
+  "unresolved_questions": ["Is projector rental included?"],
+  "people_mentioned": ["Asha", "Ravi"],
+  "deadlines": ["Menu confirmation by Friday"]
+}
 ```
 
-RAG documents are built from:
+The orchestrator verifies that the current user can access the chat, loads the
+messages, and sends only that chat transcript to the AI engine.
 
-- workspace name and roles
-- up to 1000 latest messages from workspace chats
-- up to 500 latest workspace tasks and comments
+## 10. Event Coordinator Agent
 
-The backend computes a fingerprint of the workspace documents. If content has
-not changed in the current backend process, it avoids unnecessary re-indexing.
+The coordinator combines task state, chat activity, and workspace membership to
+answer:
 
-## 9. Task Planning Agent Flow
+- Are we ready for the event?
+- What is blocked?
+- Who has too many tasks?
+- Which tasks need follow-up?
 
-```mermaid
-sequenceDiagram
-  participant FE as WorkspaceAssistant
-  participant API as Express AI Controller
-  participant AI as Flask LangChain Agent
-  participant DB as MongoDB
+It produces readiness, blockers, workload concerns, follow-ups, and evidence.
+It is advisory and does not modify tasks.
 
-  FE->>API: POST /api/ai/workspaces/:id/task-plan
-  API->>DB: Verify workspace membership and load members/context
-  API->>AI: Request structured task plan
-  AI-->>API: TaskPlan JSON
-  API->>API: Normalize assigneeEmail and sign approval token
-  API-->>FE: Proposed plan + approval token
-  FE->>API: POST /api/ai/workspaces/:id/task-plan/apply
-  API->>API: Verify signed token, user, workspace, expiry
-  API->>DB: Validate assignees are workspace members
-  API->>DB: Insert tasks
-  API-->>FE: Created tasks
-```
+## 11. Data Ownership
 
-The agent never writes directly to MongoDB. It returns a structured proposal.
-The backend creates tasks only after explicit approval from the user.
+The current migration-safe design uses a shared MongoDB cluster and shared
+Mongoose model package. Logical ownership is:
 
-## 10. AI Service Internals
+| Data | Owner |
+| --- | --- |
+| Users, workspaces, roles | Identity service |
+| Chats and messages | Chat service |
+| Tasks and comments | Task service |
+| FCM tokens and delivery state | Notification service |
+| Vectors and AI retrieval metadata | AI engine |
 
-The Flask service exposes internal-only routes:
+The next isolation step is database-per-service or schema-per-service with
+events for cross-service projections. The gateway and runtime split means that
+change does not require changing frontend API paths.
 
-```text
-POST /v1/workspaces/:workspaceId/index
-POST /v1/workspaces/:workspaceId/ask
-POST /v1/workspaces/:workspaceId/task-plan
-GET  /health
-```
-
-All `/v1` routes require `X-Service-Token`. The frontend never calls Flask
-directly.
-
-LangChain pieces:
-
-- `OpenAIEmbeddings`: creates embeddings for Chroma.
-- `Chroma`: stores one vector collection per workspace.
-- `ChatOpenAI`: answers RAG questions.
-- `create_agent`: creates the task planning agent.
-- `TaskPlan` and `PlannedTask`: Pydantic schemas enforce structured agent
-  output, including maximum 20 tasks.
-
-Prompt safety:
-
-- The assistant is instructed to answer only from retrieved workspace context.
-- Retrieved workspace content is treated as untrusted data.
-- The task agent is told not to claim task creation and to assign only listed
-  workspace members.
-
-## 11. Security Boundaries
-
-Security rules implemented:
-
-- JWT required for all Express `/api/ai/*` routes.
-- User must be a workspace member before sync, ask, plan, or apply.
-- Flask AI routes require internal service token.
-- AI-generated task plans are signed with `JWT_SECRET` and expire after 30
-  minutes.
-- Applying a task plan re-validates user id, workspace id, task count, and
-  assignees.
-- The AI service receives only workspace-scoped documents selected by Express.
-
-Operational security requirements:
-
-- Replace default `JWT_SECRET`.
-- Replace default `AI_SERVICE_TOKEN`.
-- Set `OPENAI_API_KEY`.
-- In production, do not expose port `5001` publicly.
-- Configure Firebase credentials through `FIREBASE_SERVICE_ACCOUNT_PATH` or
-  `FIREBASE_SERVICE_ACCOUNT_JSON`.
-
-## 12. Failure Modes
-
-- Missing `OPENAI_API_KEY`: AI health remains OK, but ask/index/plan fails when
-  embeddings or model calls are attempted.
-- AI service down: Express returns an AI-service error to the assistant modal.
-- Workspace not found or unauthorized: Express rejects the request before any AI
-  call.
-- Invalid task-plan approval token: Express rejects the apply request.
-- Assignee not in workspace: generated tasks are not created.
-- Firebase credentials missing: Firebase uses application default credentials;
-  notification delivery may fail in local environments, but backend startup no
-  longer depends on a hard-coded JSON file.
-
-## 13. How To Run
-
-Create `.env` from `.env.example` and set secrets:
+## 12. Local Runtime
 
 ```bash
 docker compose up --build
+docker compose ps
 ```
 
-Useful health checks:
+URLs:
 
-```bash
-curl http://localhost:3000
-curl http://localhost:5000/health
-curl http://localhost:5001/health
+- frontend: `http://localhost:3000`
+- API gateway: `http://localhost:5000`
+- Swagger: `http://localhost:5000/api-docs`
+- aggregate service health: `http://localhost:5000/health/services`
+- AI engine direct health: `http://localhost:5001/health`
+
+## 13. Deployment Architectures
+
+### Render and Vercel
+
+```mermaid
+flowchart LR
+  V["Vercel React App"] --> RW["Render API Gateway"]
+  RW --> RP["Render Private Services"]
+  RP --> Atlas[("MongoDB Atlas")]
+  RP --> RK[("Render Key Value")]
+  RP --> CK[("External Kafka")]
+  RP --> AI["AI Engine + Persistent Chroma Disk"]
 ```
 
-## 14. Verification Checklist
+`render.yaml` creates the gateway, private services, Redis-compatible key value,
+and the AI disk. Vercel builds the React app from `vercel.json`.
 
-For a complete local verification:
+### AWS
 
-1. `docker compose config --quiet`
-2. `docker compose build ai-service backend frontend`
-3. `docker compose up -d mongodb redis zookeeper kafka ai-service backend frontend`
-4. `docker compose ps`
-5. `curl http://localhost:5001/health`
-6. `curl http://localhost:5000/health`
-7. `curl http://localhost:3000`
-8. `docker compose run --rm --no-deps frontend npm run build`
-9. Run AI service smoke checks for health and service-token behavior.
+```mermaid
+flowchart LR
+  User --> CF["CloudFront"]
+  CF --> S3["Private S3 Frontend"]
+  CF --> ALB["Application Load Balancer"]
+  ALB --> ECS["ECS Fargate Gateway"]
+  ECS --> CloudMap["Cloud Map Service Discovery"]
+  CloudMap --> Services["Fargate Internal Services"]
+  Services --> Redis["ElastiCache Redis"]
+  Services --> Secrets["Secrets Manager"]
+  Services --> Atlas[("MongoDB Atlas")]
+  Services --> Kafka[("Managed External Kafka")]
+```
 
-Full semantic AI behavior requires a valid `OPENAI_API_KEY`. Without it, the
-service can be built and health-tested, but OpenAI embedding/model calls cannot
-complete.
+Terraform is in `infra/aws`. CloudFront forwards `/api/*` and `/socket.io/*` to
+the ALB, so the frontend can use one HTTPS origin.
+
+## 14. CI/CD
+
+- `ci.yml`: Node syntax checks, frontend build, Flask tests, Compose validation,
+  Terraform formatting and validation.
+- `deploy-render-vercel.yml`: production Vercel deployment and Render deploy
+  hooks.
+- `deploy-aws.yml`: OIDC authentication, ECR bootstrap, image build/push,
+  Terraform apply, S3 frontend sync, and CloudFront invalidation.
+
+See `docs/deployment-guide.md` for required secrets and rollout commands.
