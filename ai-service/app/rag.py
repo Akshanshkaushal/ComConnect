@@ -40,9 +40,23 @@ def replace_workspace_documents(workspace_id, raw_documents):
     return len(documents)
 
 
-def retrieve(workspace_id, query):
+def retrieve(workspace_id, query, limit=None):
     store = workspace_store(workspace_id)
     return store.similarity_search(
         query,
-        k=current_app.config["RETRIEVAL_LIMIT"],
+        k=limit or current_app.config["RETRIEVAL_LIMIT"],
+    )
+
+
+def search(workspace_id, query, tags=None, limit=None):
+    search_text = " ".join(
+        part for part in [query.strip(), " ".join(f"#{tag}" for tag in (tags or []))] if part
+    )
+    if not search_text:
+        return []
+
+    store = workspace_store(workspace_id)
+    return store.similarity_search_with_relevance_scores(
+        search_text,
+        k=limit or current_app.config["RETRIEVAL_LIMIT"],
     )

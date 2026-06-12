@@ -30,6 +30,7 @@ const TaskDialog = ({ isOpen, onClose, workspaceId, selectedChat }) => {
   const [description, setDescription] = useState("");
   const [email, setEmail] = useState("");
   const [attachments, setAttachments] = useState([]);
+  const [tags, setTags] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [channelUsers, setChannelUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -95,6 +96,7 @@ const TaskDialog = ({ isOpen, onClose, workspaceId, selectedChat }) => {
           email: email.trim(),
           workspaceId,
           attachments,
+          tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
         },
         config
       );
@@ -113,6 +115,7 @@ const TaskDialog = ({ isOpen, onClose, workspaceId, selectedChat }) => {
       setDescription("");
       setEmail("");
       setAttachments([]);
+      setTags("");
       setSearchResults([]);
     } catch (error) {
       console.error("Task allocation error:", {
@@ -248,6 +251,17 @@ const TaskDialog = ({ isOpen, onClose, workspaceId, selectedChat }) => {
                   borderColor: "#34d399",
                   boxShadow: "0 0 0 1px #34d399",
                 }}
+              />
+            </FormControl>
+            <FormControl>
+              <FormLabel color="#bdc8c3">Tags</FormLabel>
+              <Input
+                value={tags}
+                onChange={(event) => setTags(event.target.value)}
+                placeholder="venue, urgent, launch"
+                bg="#202725"
+                borderColor="#3a4541"
+                color="#eef4f1"
               />
             </FormControl>
             <Button

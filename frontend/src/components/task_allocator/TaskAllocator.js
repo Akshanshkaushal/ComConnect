@@ -28,7 +28,6 @@ import {
 import { useNavigate } from "react-router-dom";
 import { ChatState } from "../../Context/ChatProvider";
 import { API_URL } from "../../config/api.config";
-import AllocatedTasks from "./AllocatedTasks";
 import StatusPanel from "./StatusPanel";
 
 const fieldStyles = {
@@ -49,6 +48,7 @@ const TaskAllocator = ({ workspaceId }) => {
     description: "",
     email: "",
     attachments: "",
+    tags: "",
   });
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +66,7 @@ const TaskAllocator = ({ workspaceId }) => {
     setLoading(true);
     try {
       const { data } = await axios.get(
-        `${API_URL}/tasks/my-tasks?workspaceId=${workspaceId}`,
+        `${API_URL}/tasks/workspace/${workspaceId}`,
         config
       );
       setTasks(data);
@@ -108,11 +108,15 @@ const TaskAllocator = ({ workspaceId }) => {
             .split(",")
             .map((item) => item.trim())
             .filter(Boolean),
+          tags: form.tags
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean),
         },
         config
       );
       setTasks((current) => [data, ...current]);
-      setForm({ heading: "", description: "", email: "", attachments: "" });
+      setForm({ heading: "", description: "", email: "", attachments: "", tags: "" });
       toast({ title: "Task allocated", status: "success" });
     } catch (error) {
       toast({
@@ -131,8 +135,42 @@ const TaskAllocator = ({ workspaceId }) => {
     done: tasks.filter((task) => task.status === "done"),
   };
 
+  const moveTask = async (taskId, status) => {
+    const currentTask = tasks.find((task) => task._id === taskId);
+    if (!currentTask || currentTask.status === status) return;
+    if (
+      currentTask.assignee?._id !== user?._id &&
+      currentTask.createdBy?._id !== user?._id
+    ) {
+      toast({ title: "Only the assignee or creator can move this task", status: "warning" });
+      return;
+    }
+
+    setTasks((current) =>
+      current.map((task) => (task._id === taskId ? { ...task, status } : task))
+    );
+    try {
+      await axios.patch(
+        `${API_URL}/tasks/update-status`,
+        { taskId, status },
+        config
+      );
+    } catch (error) {
+      setTasks((current) =>
+        current.map((task) =>
+          task._id === taskId ? { ...task, status: currentTask.status } : task
+        )
+      );
+      toast({
+        title: "Task could not be moved",
+        description: error.response?.data?.message || error.message,
+        status: "error",
+      });
+    }
+  };
+
   const stats = [
-    { label: "Assigned to me", value: tasks.length, icon: FiList },
+    { label: "Workspace tasks", value: tasks.length, icon: FiList },
     { label: "To do", value: taskGroups["to-do"].length, icon: FiClock },
     { label: "In progress", value: taskGroups["in-progress"].length, icon: FiRefreshCw },
     { label: "Completed", value: taskGroups.done.length, icon: FiCheckCircle },
@@ -275,6 +313,15 @@ const TaskAllocator = ({ workspaceId }) => {
                     placeholder="Comma-separated URLs"
                   />
                 </FormControl>
+                <FormControl>
+                  <FormLabel fontSize="sm" color="#bdc8c3">Tags</FormLabel>
+                  <Input
+                    {...fieldStyles}
+                    value={form.tags}
+                    onChange={updateField("tags")}
+                    placeholder="venue, urgent, launch"
+                  />
+                </FormControl>
                 <Button
                   type="submit"
                   bg="#34d399"
@@ -292,40 +339,47 @@ const TaskAllocator = ({ workspaceId }) => {
           <GridItem minW={0}>
             <Flex align="end" justify="space-between" mb={4}>
               <Box>
-                <Text fontSize="xl" fontWeight="750">My work board</Text>
+                <Text fontSize="xl" fontWeight="750">Workspace Kanban</Text>
                 <Text color="#8f9d97" fontSize="sm">
-                  Tasks assigned to you in this workspace
+                  Drag tasks between stages. Assignees and creators can update status.
                 </Text>
               </Box>
             </Flex>
             <SimpleGrid columns={{ base: 1, lg: 3 }} spacing={4} alignItems="start">
               <StatusPanel
                 title="To do"
+                status="to-do"
                 accent="#f59e0b"
                 tasks={taskGroups["to-do"]}
                 loading={loading}
                 fetchTasks={fetchTasks}
                 config={config}
+                onMove={moveTask}
+                currentUserId={user?._id}
               />
               <StatusPanel
                 title="In progress"
+                status="in-progress"
                 accent="#60a5fa"
                 tasks={taskGroups["in-progress"]}
                 loading={loading}
                 fetchTasks={fetchTasks}
                 config={config}
+                onMove={moveTask}
+                currentUserId={user?._id}
               />
               <StatusPanel
                 title="Done"
+                status="done"
                 accent="#34d399"
                 tasks={taskGroups.done}
                 loading={loading}
                 fetchTasks={fetchTasks}
                 config={config}
+                onMove={moveTask}
+                currentUserId={user?._id}
               />
             </SimpleGrid>
-
-            <AllocatedTasks workspaceId={workspaceId} />
           </GridItem>
         </Grid>
       </Box>

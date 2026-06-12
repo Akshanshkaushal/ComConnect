@@ -1,8 +1,40 @@
 import { Box, Flex, Skeleton, Stack, Text } from "@chakra-ui/react";
+import { useState } from "react";
 import TaskCard from "./TaskCard";
 
-const StatusPanel = ({ title, accent, tasks, loading, fetchTasks, config }) => (
-  <Box minW={0} bg="#141918" border="1px solid #313b37">
+const StatusPanel = ({
+  title,
+  accent,
+  status,
+  tasks,
+  loading,
+  fetchTasks,
+  config,
+  onMove,
+  currentUserId,
+}) => {
+  const [draggingOver, setDraggingOver] = useState(false);
+
+  return (
+  <Box
+    minW={0}
+    bg={draggingOver ? "#19231f" : "#141918"}
+    border="1px solid"
+    borderColor={draggingOver ? accent : "#313b37"}
+    transition="background 120ms ease, border-color 120ms ease"
+    onDragOver={(event) => {
+      event.preventDefault();
+      setDraggingOver(true);
+    }}
+    onDragLeave={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setDraggingOver(false);
+    }}
+    onDrop={(event) => {
+      event.preventDefault();
+      setDraggingOver(false);
+      onMove?.(event.dataTransfer.getData("text/task-id"), status);
+    }}
+  >
     <Flex px={4} py={3} align="center" justify="space-between" borderBottom="1px solid #313b37">
       <Flex align="center" gap={2}>
         <Box w="7px" h="7px" borderRadius="50%" bg={accent} />
@@ -41,11 +73,20 @@ const StatusPanel = ({ title, accent, tasks, loading, fetchTasks, config }) => (
             task={task}
             fetchTasks={fetchTasks}
             config={config}
+            draggable={
+              task.assignee?._id === currentUserId ||
+              task.createdBy?._id === currentUserId
+            }
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/task-id", task._id);
+            }}
           />
         ))
       )}
     </Stack>
   </Box>
-);
+  );
+};
 
 export default StatusPanel;

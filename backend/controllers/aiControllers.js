@@ -193,4 +193,5 @@ module.exports = {
   createWorkspaceTaskPlan,
   summarizeGroupChat,
   syncWorkspaceKnowledge,
+  syncWorkspace,
 };

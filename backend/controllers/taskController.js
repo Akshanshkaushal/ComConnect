@@ -3,9 +3,10 @@ const asyncHandler = require("express-async-handler");
 const Task = require("../models/taskModel");
 const User = require("../models/userModel");
 const { getWorkspaceForMember } = require("../services/workspaceAccessService");
+const { extractTags, normalizeTags } = require("../services/tagService");
 
 const allocateTask = asyncHandler(async (req, res) => {
-  const { heading, description, email, workspaceId, attachments } = req.body;
+  const { heading, description, email, workspaceId, attachments, tags } = req.body;
   if (!heading?.trim() || !description?.trim() || !email?.trim() || !workspaceId) {
     res.status(400);
     throw new Error("heading, description, email, and workspaceId are required");
@@ -28,6 +29,10 @@ const allocateTask = asyncHandler(async (req, res) => {
     assignee: assignee._id,
     workspace: workspace._id,
     attachments,
+    tags: normalizeTags([
+      ...(Array.isArray(tags) ? tags : []),
+      ...extractTags(`${heading} ${description}`),
+    ]),
     createdBy: req.user._id,
   });
   await task.populate("assignee createdBy", "name email pic");
@@ -59,6 +64,16 @@ const getAllocatedTasks = asyncHandler(async (req, res) => {
       .populate("assignee createdBy", "name email pic")
       .populate("comments.user", "name email pic")
       .sort({ createdAt: -1 })
+  );
+});
+
+const getWorkspaceTasks = asyncHandler(async (req, res) => {
+  await getWorkspaceForMember(req.params.workspaceId, req.user._id);
+  res.json(
+    await Task.find({ workspace: req.params.workspaceId })
+      .populate("assignee createdBy", "name email pic")
+      .populate("comments.user", "name email pic")
+      .sort({ updatedAt: -1 })
   );
 });
 
@@ -114,5 +129,6 @@ module.exports = {
   allocateTask,
   getAllocatedTasks,
   getMyTasks,
+  getWorkspaceTasks,
   updateTaskStatus,
 };

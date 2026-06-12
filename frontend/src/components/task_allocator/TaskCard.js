@@ -33,7 +33,7 @@ const statusLabels = {
   done: "Done",
 };
 
-const TaskCard = ({ task, fetchTasks, config }) => {
+const TaskCard = ({ task, fetchTasks, config, draggable = false, onDragStart }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
   const [newStatus, setNewStatus] = useState(task.status);
@@ -92,10 +92,12 @@ const TaskCard = ({ task, fetchTasks, config }) => {
   return (
     <>
       <Box
+        draggable={draggable}
+        onDragStart={onDragStart}
         p={4}
         bg="#202725"
         border="1px solid #313b37"
-        cursor="pointer"
+        cursor={draggable ? "grab" : "pointer"}
         transition="border-color 160ms ease, transform 160ms ease"
         _hover={{ borderColor: "#52615b", transform: "translateY(-1px)" }}
         onClick={onOpen}
@@ -118,6 +120,15 @@ const TaskCard = ({ task, fetchTasks, config }) => {
         <Text color="#9eaaa5" fontSize="xs" lineHeight="1.5" mt={2} noOfLines={3}>
           {task.description}
         </Text>
+        {task.tags?.length > 0 && (
+          <Flex mt={3} gap={1} wrap="wrap">
+            {task.tags.slice(0, 4).map((tag) => (
+              <Text key={tag} color="#6ee7b7" fontSize="10px">
+                #{tag}
+              </Text>
+            ))}
+          </Flex>
+        )}
         <Flex mt={4} align="center" justify="space-between" gap={2}>
           <HStack spacing={2} minW={0}>
             <Avatar

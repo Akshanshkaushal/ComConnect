@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request
 
 from .auth import require_service_token
 from .chains import answer_question, coordinate_event, create_task_plan, summarize_chat
-from .rag import replace_workspace_documents
+from .rag import replace_workspace_documents, search
 
 api = Blueprint("api", __name__)
 
@@ -35,6 +35,41 @@ def ask_workspace(workspace_id):
         return jsonify({"message": "question is required"}), 400
     answer, documents = answer_question(workspace_id, question)
     return jsonify({"answer": answer, "sources": _sources(documents)})
+
+
+@api.post("/workspaces/<workspace_id>/search")
+@require_service_token
+def search_workspace(workspace_id):
+    payload = request.get_json(silent=True) or {}
+    query = payload.get("query", "").strip()
+    tags = [
+        str(tag).strip().lower().lstrip("#")
+        for tag in payload.get("tags", [])
+        if str(tag).strip()
+    ]
+    if not query and not tags:
+        return jsonify({"results": []})
+
+    limit = min(max(int(payload.get("limit", 12)), 1), 30)
+    results = []
+    for document, score in search(workspace_id, query, tags, limit):
+        metadata = document.metadata
+        results.append(
+            {
+                "type": metadata.get("type"),
+                "sourceId": metadata.get("source_id"),
+                "chatId": metadata.get("chat_id"),
+                "label": metadata.get("label"),
+                "title": metadata.get("label"),
+                "excerpt": document.page_content[:500],
+                "tags": [
+                    tag for tag in metadata.get("tags", "").split(",") if tag
+                ],
+                "createdAt": metadata.get("created_at"),
+                "score": score,
+            }
+        )
+    return jsonify({"results": results})
 
 
 @api.post("/workspaces/<workspace_id>/task-plan")

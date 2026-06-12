@@ -202,31 +202,31 @@ const CreateWorkspaceModal = ({ onClose }) => {
   return (
     <>
       <Button
-        bg="#21364A"
-        color="white"
+        bg="#34d399"
+        color="#07120e"
         alignItems="center"
         justifyContent="center"
         rounded={10}
         onClick={handleOpen}
-        _hover={{ bg: "#192937ff" }}
+        _hover={{ bg: "#6ee7b7" }}
       >
         Create Workspace
       </Button>
 
       <Modal size="lg" isOpen={isOpen} onClose={handleModalClose} isCentered>
-        <ModalOverlay bg="blackAlpha.700" />
+        <ModalOverlay bg="blackAlpha.800" backdropFilter="blur(4px)" />
         <ModalContent
           pb={4}
           pt={1}
-          bg="#0F1924"
-          color="white"
+          bg="#171c1b"
+          color="#eef4f1"
           border="1px solid"
-          borderColor="#2982db20"
+          borderColor="#3a4541"
         >
           <ModalHeader color="white">
             {step === 1 ? "Create Workspace" : "Invite Users"}
           </ModalHeader>
-          <ModalCloseButton color="white" _hover={{ bg: "#21364A" }} />
+          <ModalCloseButton color="#eef4f1" _hover={{ bg: "#2c3532" }} />
           <ModalBody>
             {step === 1 && (
               <Stack spacing={4}>
@@ -236,8 +236,8 @@ const CreateWorkspaceModal = ({ onClose }) => {
                     placeholder="Enter workspace name"
                     value={workspaceName}
                     onChange={(e) => setWorkspaceName(e.target.value)}
-                    bg="#0F1924"
-                    borderColor="#2982db20"
+                    bg="#202725"
+                    borderColor="#3a4541"
                     color="white"
                     _placeholder={{ color: "gray.400" }}
                     _hover={{ borderColor: "#2982db40" }}
@@ -265,8 +265,8 @@ const CreateWorkspaceModal = ({ onClose }) => {
                           handleAddRole();
                         }
                       }}
-                      bg="#0F1924"
-                      borderColor="#2982db20"
+                      bg="#202725"
+                      borderColor="#3a4541"
                       color="white"
                       _placeholder={{ color: "gray.400" }}
                       _hover={{ borderColor: "#2982db40" }}
@@ -278,9 +278,9 @@ const CreateWorkspaceModal = ({ onClose }) => {
                     />
                     <Button
                       onClick={handleAddRole}
-                      bg="#21364A"
-                      color="white"
-                      _hover={{ bg: "#192937ff" }}
+                      bg="#34d399"
+                      color="#07120e"
+                      _hover={{ bg: "#6ee7b7" }}
                       flexShrink={0}
                     >
                       Add
@@ -296,8 +296,8 @@ const CreateWorkspaceModal = ({ onClose }) => {
                         <Tag
                           key={index}
                           size="md"
-                          bg="#21364A"
-                          color="white"
+                          bg="#26332e"
+                          color="#6ee7b7"
                           borderRadius="full"
                         >
                           <TagLabel>{role}</TagLabel>
@@ -309,10 +309,10 @@ const CreateWorkspaceModal = ({ onClose }) => {
                 )}
 
                 <Button
-                  bg="#21364A"
-                  color="white"
-                  _hover={{ bg: "#192937ff" }}
-                  _active={{ bg: "#192937ff" }}
+                  bg="#34d399"
+                  color="#07120e"
+                  _hover={{ bg: "#6ee7b7" }}
+                  _active={{ bg: "#10b981" }}
                   onClick={createWorkspace}
                   mt={4}
                 >
@@ -331,11 +331,11 @@ const CreateWorkspaceModal = ({ onClose }) => {
                         key={index}
                         p={3}
                         cursor="pointer"
-                        bg={selectedRole === role.roleName ? "#21364A" : "#0F1924"}
+                        bg={selectedRole === role.roleName ? "#26332e" : "#202725"}
                         borderRadius="md"
                         border="1px solid"
-                        borderColor="#2982db20"
-                        _hover={{ bg: "#21364A" }}
+                        borderColor="#3a4541"
+                        _hover={{ bg: "#2c3532" }}
                         onClick={() => setSelectedRole(role.roleName)}
                       >
                         <Text color="white">{role.roleName}</Text>
@@ -347,10 +347,10 @@ const CreateWorkspaceModal = ({ onClose }) => {
                 {selectedRole && (
                   <Box
                     p={4}
-                    bg="#0F1924"
+                    bg="#202725"
                     borderRadius="md"
                     border="1px solid"
-                    borderColor="#2982db20"
+                    borderColor="#3a4541"
                   >
                     <FormControl>
                       <FormLabel color="gray.300">
@@ -360,8 +360,8 @@ const CreateWorkspaceModal = ({ onClose }) => {
                         placeholder="Enter emails separated by commas"
                         value={emails}
                         onChange={(e) => setEmails(e.target.value)}
-                        bg="#0F1924"
-                        borderColor="#2982db20"
+                        bg="#202725"
+                        borderColor="#3a4541"
                         color="white"
                         _placeholder={{ color: "gray.400" }}
                         _hover={{ borderColor: "#2982db40" }}
@@ -373,9 +373,9 @@ const CreateWorkspaceModal = ({ onClose }) => {
                       />
                       <Button
                         mt={3}
-                        bg="#21364A"
-                        color="white"
-                        _hover={{ bg: "#192937ff" }}
+                        bg="#34d399"
+                        color="#07120e"
+                        _hover={{ bg: "#6ee7b7" }}
                         onClick={inviteUsers}
                       >
                         Send Invitations
@@ -385,10 +385,10 @@ const CreateWorkspaceModal = ({ onClose }) => {
                 )}
 
                 <Button
-                  bg="#21364A"
-                  color="white"
-                  _hover={{ bg: "#192937ff" }}
-                  _active={{ bg: "#192937ff" }}
+                  bg="#34d399"
+                  color="#07120e"
+                  _hover={{ bg: "#6ee7b7" }}
+                  _active={{ bg: "#10b981" }}
                   onClick={handleDone}
                   mt={4}
                 >

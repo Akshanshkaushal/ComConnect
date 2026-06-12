@@ -1,5 +1,6 @@
 const Chat = require("../models/chatModel");
 const Message = require("../models/messageModel");
+const { extractTags } = require("./tagService");
 const User = require("../models/userModel");
 const { queueChatNotifications } = require("./notificationClient");
 
@@ -31,6 +32,7 @@ const persistMessage = async ({ eventId, senderId, content, chatId }) => {
     sender: senderId,
     content,
     chat: chatId,
+    tags: extractTags(content),
     streamEventId: eventId,
   });
   message = await message.populate("sender", "name pic email");

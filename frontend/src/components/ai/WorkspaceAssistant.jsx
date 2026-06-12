@@ -132,7 +132,8 @@ const WorkspaceAssistant = ({ workspaceId, onTasksCreated }) => {
             <ListItem
               key={`${title}-${index}`}
               p={2}
-              border="1px solid #29445d"
+              border="1px solid #313b37"
+              bg="#202725"
               borderRadius="6px"
               fontSize="sm"
             >
@@ -165,16 +166,21 @@ const WorkspaceAssistant = ({ workspaceId, onTasksCreated }) => {
         border="1px solid #3a4541"
         _hover={{ bg: "#2c3532" }}
       >
-        AI Assistant
+        Agents
       </Button>
 
       <Modal isOpen={isOpen} onClose={onClose} size="xl" isCentered>
-        <ModalOverlay bg="blackAlpha.700" />
-        <ModalContent bg="#0f1924" color="white" border="1px solid #29445d">
-          <ModalHeader>Workspace AI Assistant</ModalHeader>
-          <ModalCloseButton />
+        <ModalOverlay bg="blackAlpha.800" backdropFilter="blur(4px)" />
+        <ModalContent bg="#171c1b" color="#eef4f1" border="1px solid #3a4541">
+          <ModalHeader borderBottom="1px solid #313b37">
+            <Text fontSize="lg">Workspace agents</Text>
+            <Text color="#8f9d97" fontSize="xs" fontWeight="400" mt={1}>
+              Search knowledge, plan work, and assess event readiness
+            </Text>
+          </ModalHeader>
+          <ModalCloseButton _hover={{ bg: "#2c3532" }} />
           <ModalBody>
-            <Tabs colorScheme="blue" isFitted>
+            <Tabs colorScheme="green" isFitted>
               <TabList>
                 <Tab>Ask Workspace</Tab>
                 <Tab>Plan Tasks</Tab>
@@ -187,22 +193,24 @@ const WorkspaceAssistant = ({ workspaceId, onTasksCreated }) => {
                       value={question}
                       onChange={(event) => setQuestion(event.target.value)}
                       placeholder="What decisions were made about the event budget?"
-                      bg="#162737"
-                      borderColor="#29445d"
+                      bg="#202725"
+                      borderColor="#3a4541"
                     />
                     <Button
                       onClick={ask}
                       isLoading={loading}
                       isDisabled={!question.trim()}
-                      colorScheme="blue"
+                      bg="#34d399"
+                      color="#07120e"
+                      _hover={{ bg: "#6ee7b7" }}
                     >
                       Ask
                     </Button>
                     {answer && (
                       <Box>
                         <Text whiteSpace="pre-wrap">{answer.answer}</Text>
-                        <Divider my={4} borderColor="#29445d" />
-                        <Text fontSize="sm" color="gray.400" mb={2}>
+                        <Divider my={4} borderColor="#313b37" />
+                        <Text fontSize="sm" color="#8f9d97" mb={2}>
                           Sources
                         </Text>
                         {answer.sources.map((source, index) => (
@@ -220,14 +228,16 @@ const WorkspaceAssistant = ({ workspaceId, onTasksCreated }) => {
                       value={planningRequest}
                       onChange={(event) => setPlanningRequest(event.target.value)}
                       placeholder="Create a practical launch plan for the registration desk."
-                      bg="#162737"
-                      borderColor="#29445d"
+                      bg="#202725"
+                      borderColor="#3a4541"
                     />
                     <Button
                       onClick={createPlan}
                       isLoading={loading}
                       isDisabled={!planningRequest.trim()}
-                      colorScheme="blue"
+                      bg="#34d399"
+                      color="#07120e"
+                      _hover={{ bg: "#6ee7b7" }}
                     >
                       Generate Plan
                     </Button>
@@ -239,7 +249,8 @@ const WorkspaceAssistant = ({ workspaceId, onTasksCreated }) => {
                             <ListItem
                               key={`${task.heading}-${index}`}
                               p={3}
-                              border="1px solid #29445d"
+                              border="1px solid #313b37"
+                              bg="#202725"
                               borderRadius="6px"
                             >
                               <Text fontWeight="semibold">{task.heading}</Text>
@@ -264,14 +275,16 @@ const WorkspaceAssistant = ({ workspaceId, onTasksCreated }) => {
                         setCoordinatorQuestion(event.target.value)
                       }
                       placeholder="Are we ready for the event?"
-                      bg="#162737"
-                      borderColor="#29445d"
+                      bg="#202725"
+                      borderColor="#3a4541"
                     />
                     <Button
                       onClick={askCoordinator}
                       isLoading={loading}
                       isDisabled={!coordinatorQuestion.trim()}
-                      colorScheme="blue"
+                      bg="#34d399"
+                      color="#07120e"
+                      _hover={{ bg: "#6ee7b7" }}
                     >
                       Analyze Event
                     </Button>
@@ -306,7 +319,9 @@ const WorkspaceAssistant = ({ workspaceId, onTasksCreated }) => {
           <ModalFooter>
             {plan && (
               <Button
-                colorScheme="green"
+                bg="#34d399"
+                color="#07120e"
+                _hover={{ bg: "#6ee7b7" }}
                 mr={3}
                 onClick={applyPlan}
                 isLoading={loading}
@@ -314,7 +329,7 @@ const WorkspaceAssistant = ({ workspaceId, onTasksCreated }) => {
                 Approve and Create Tasks
               </Button>
             )}
-            <Button variant="ghost" onClick={onClose}>
+            <Button variant="ghost" color="#bdc8c3" onClick={onClose} _hover={{ bg: "#202725" }}>
               Close
             </Button>
           </ModalFooter>

@@ -30,6 +30,9 @@ const buildWorkspaceDocuments = async (workspace) => {
       type: "message",
       label: chatNames.get(message.chat.toString()) || "Chat message",
       source_id: message._id.toString(),
+      chat_id: message.chat.toString(),
+      created_at: message.createdAt.toISOString(),
+      tags: (message.tags || []).join(","),
     },
   }));
 
@@ -39,6 +42,7 @@ const buildWorkspaceDocuments = async (workspace) => {
       `Task: ${task.heading}`,
       `Description: ${task.description}`,
       `Status: ${task.status}`,
+      `Tags: ${(task.tags || []).join(", ") || "None"}`,
       `Assignee: ${task.assignee?.name || "Unknown"} <${task.assignee?.email || ""}>`,
       `Comments: ${task.comments
         .map((comment) => `${comment.user?.name || "Unknown"}: ${comment.comment}`)
@@ -48,6 +52,8 @@ const buildWorkspaceDocuments = async (workspace) => {
       type: "task",
       label: task.heading,
       source_id: task._id.toString(),
+      created_at: task.updatedAt.toISOString(),
+      tags: (task.tags || []).join(","),
     },
   }));
 

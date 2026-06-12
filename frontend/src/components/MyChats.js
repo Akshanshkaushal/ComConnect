@@ -17,6 +17,7 @@ import { getSender } from "../config/ChatLogics";
 import ChatLoading from "./ChatLoading";
 import GroupChatModal from "./miscellaneous/GroupChatModal";
 import WorkspaceAssistant from "./ai/WorkspaceAssistant";
+import WorkspaceSearch from "./workspace/WorkspaceSearch";
 
 const MyChats = ({ fetchAgain }) => {
   const [loggedUser, setLoggedUser] = useState();
@@ -102,12 +103,15 @@ const MyChats = ({ fetchAgain }) => {
               leftIcon={<FiCheckSquare />}
               size="sm"
               variant="outline"
+              color="#dce6e1"
               borderColor="#3a4541"
+              _hover={{ bg: "#202725", borderColor: "#52615b" }}
               onClick={() => navigate(`/tasks/${workspaceId}`)}
             >
               Tasks
             </Button>
           </Tooltip>
+          <WorkspaceSearch workspaceId={workspaceId} />
           <Tooltip label="Open event map">
             <Button
               aria-label="Open event map"

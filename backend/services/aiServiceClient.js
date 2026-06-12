@@ -42,6 +42,12 @@ const askWorkspace = (workspaceId, question) =>
     body: JSON.stringify({ question }),
   });
 
+const searchWorkspace = (workspaceId, query, tags = [], limit = 12) =>
+  requestAiService(`/v1/workspaces/${workspaceId}/search`, {
+    method: "POST",
+    body: JSON.stringify({ query, tags, limit }),
+  });
+
 const planTasks = (workspaceId, request, members) =>
   requestAiService(`/v1/workspaces/${workspaceId}/task-plan`, {
     method: "POST",
@@ -65,5 +71,6 @@ module.exports = {
   coordinateEvent,
   indexWorkspace,
   planTasks,
+  searchWorkspace,
   summarizeChat,
 };
