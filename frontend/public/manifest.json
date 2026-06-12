@@ -1,19 +1,67 @@
 {
+  "id": "/",
   "short_name": "ComConnect",
-  "name": "ComConnect - Team Communication",
+  "name": "ComConnect Workspace",
+  "description": "Workspace communication, event coordination, tasks, maps, and AI assistance.",
   "icons": [
     {
-      "src": "comconnect-mark.svg",
+      "src": "/comconnect-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/comconnect-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/comconnect-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/comconnect-mark.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "theme_color": "#101414",
   "background_color": "#101414",
-  "orientation": "portrait",
-  "scope": "/",
-  "description": "Workspace communication, event coordination, tasks, and AI assistance."
+  "orientation": "any",
+  "categories": ["productivity", "business", "social"],
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Open workspaces",
+      "short_name": "Workspaces",
+      "url": "/workspace",
+      "icons": [
+        {
+          "src": "/comconnect-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "My tasks",
+      "short_name": "Tasks",
+      "url": "/my-tasks",
+      "icons": [
+        {
+          "src": "/comconnect-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
 }

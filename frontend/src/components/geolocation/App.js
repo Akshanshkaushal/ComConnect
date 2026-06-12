@@ -1,175 +1,212 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import io from "socket.io-client";
-import MapComponent from "./Map";
-import { indexedDBService } from "../../services/indexedDBService";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { FiArrowLeft, FiMapPin } from "react-icons/fi";
+import { useNavigate, useParams } from "react-router-dom";
 import { ChatState } from "../../Context/ChatProvider";
-import { API_URL } from "../../config/api.config";
+import socket from "../../Context/SocketContext";
+import MapComponent from "./Map";
+import "./geolocation.css";
+
+const normalizeUsers = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === "object") return Object.values(payload);
+  return [];
+};
 
 const Geo = () => {
   const { user } = ChatState();
-  const [isLoading, setIsLoading] = useState(true);
+  const { workspaceId } = useParams();
+  const navigate = useNavigate();
   const [location, setLocation] = useState(null);
-  const [accuracy, setAccuracy] = useState(null);
   const [otherUsers, setOtherUsers] = useState(new Map());
-  const [connectionStatus, setConnectionStatus] = useState("disconnected");
-  const socketRef = useRef(null);
+  const [connectionStatus, setConnectionStatus] = useState(
+    socket.connected ? "connected" : "connecting"
+  );
+  const [isSharing, setIsSharing] = useState(false);
+  const [locationError, setLocationError] = useState("");
   const watchIdRef = useRef(null);
-  const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 5;
 
-  // Handle location updates
-  const handleLocationUpdate = useCallback(
-    async (position) => {
+  const publishLocation = useCallback(
+    (position) => {
       if (!user?._id) return;
 
-      const { latitude, longitude, accuracy } = position.coords;
       const locationData = {
-        latitude,
-        longitude,
-        accuracy,
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
         userId: user._id,
+        userName: user.name,
+        userPic: user.pic,
+        workspaceId,
         timestamp: Date.now(),
       };
 
-      // Update local state
       setLocation(locationData);
-      setAccuracy(accuracy);
-
-      try {
-        // Store in IndexedDB
-        await indexedDBService.storeLocation(locationData);
-
-        // If online, send to server
-        if (socketRef.current?.connected) {
-          socketRef.current.emit("location-update", locationData);
-        }
-      } catch (error) {
-        console.error("Error handling location update:", error);
-      }
+      setLocationError("");
+      if (socket.connected) socket.emit("location-update", locationData);
     },
-    [user]
+    [user, workspaceId]
   );
 
-  // Sync unsynced locations when coming online
-  const syncLocations = useCallback(async () => {
-    try {
-      const unsynedLocations = await indexedDBService.getUnsynedLocations();
-      if (unsynedLocations.length > 0 && socketRef.current?.connected) {
-        // Send locations in batches
-        const batchSize = 10;
-        for (let i = 0; i < unsynedLocations.length; i += batchSize) {
-          const batch = unsynedLocations.slice(i, i + batchSize);
-          socketRef.current.emit("bulk-location-update", batch);
-
-          // Mark these locations as synced
-          const timestamps = batch.map((loc) => loc.timestamp);
-          await indexedDBService.markLocationsAsSynced(timestamps);
-        }
-      }
-    } catch (error) {
-      console.error("Error syncing locations:", error);
+  const stopSharing = useCallback(() => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
     }
-  }, []);
-
-  // Initialize socket connection with user token
-  const initializeSocket = useCallback(() => {
-    if (!user?.token) return;
-
-    const SOCKET_URL = API_URL.replace("/api", "");
-
-    const socket = io(SOCKET_URL, {
-      reconnection: true,
-      reconnectionAttempts: maxReconnectAttempts,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
-      auth: {
-        token: user.token,
-      },
-    });
-
-    socket.on("connect", () => {
-      console.log("Socket connected");
-      setConnectionStatus("connected");
-      reconnectAttempts.current = 0;
-      syncLocations(); // Sync any stored locations
-    });
-
-    socket.on("disconnect", () => {
-      console.log("Socket disconnected");
-      setConnectionStatus("disconnected");
-    });
-
-    socket.on("other-users-location", (users) => {
-      setOtherUsers(new Map(users.map((user) => [user.userId, user])));
-    });
-
-    socketRef.current = socket;
-  }, [user?.token, syncLocations]);
-
-  // Start location watching
-  const startLocationWatch = useCallback(() => {
-    if ("serviceWorker" in navigator && "SyncManager" in window) {
-      navigator.serviceWorker.ready.then((registration) => {
-        if (navigator.geolocation) {
-          watchIdRef.current = navigator.geolocation.watchPosition(
-            handleLocationUpdate,
-            (error) => console.error("Location error:", error),
-            {
-              enableHighAccuracy: true,
-              timeout: 10000,
-              maximumAge: 0,
-            }
-          );
-        }
+    setIsSharing(false);
+    if (socket.connected) {
+      socket.emit("location-sharing-stopped", {
+        userId: user?._id,
+        workspaceId,
       });
     }
-  }, [handleLocationUpdate]);
+  }, [user?._id, workspaceId]);
+
+  const startSharing = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationError("Location is not supported by this browser.");
+      return;
+    }
+
+    setLocationError("");
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      publishLocation,
+      (error) => {
+        setIsSharing(false);
+        setLocationError(
+          error.code === error.PERMISSION_DENIED
+            ? "Location permission was denied. Enable it in your browser settings."
+            : "Your location could not be determined. Please try again."
+        );
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 5000,
+      }
+    );
+    setIsSharing(true);
+  }, [publishLocation]);
 
   useEffect(() => {
-    if (user) {
-      setIsLoading(false);
-      initializeSocket();
-      startLocationWatch();
+    if (!user?.token) return undefined;
 
-      // Clean up old locations every hour
-      const cleanupInterval = setInterval(() => {
-        indexedDBService.clearOldLocations(1);
-      }, 60 * 60 * 1000);
+    socket.auth = { token: user.token };
+    if (!socket.connected) socket.connect();
 
-      return () => {
-        if (watchIdRef.current) {
-          navigator.geolocation.clearWatch(watchIdRef.current);
-        }
-        if (socketRef.current) {
-          socketRef.current.disconnect();
-        }
-        clearInterval(cleanupInterval);
-      };
-    }
-  }, [user, initializeSocket, startLocationWatch]);
+    const joinMap = () => {
+      setConnectionStatus("connected");
+      socket.emit("setup");
+      socket.emit("join-location-workspace", { workspaceId });
+    };
+    const handleDisconnect = () => setConnectionStatus("disconnected");
+    const handleLocations = (payload) => {
+      const users = normalizeUsers(payload).filter((member) => {
+        if (!member?.userId || member.userId === user._id) return false;
+        return !member.workspaceId || !workspaceId || member.workspaceId === workspaceId;
+      });
+      setOtherUsers(new Map(users.map((member) => [member.userId, member])));
+    };
+    const handleLocation = (member) => {
+      if (
+        !member?.userId ||
+        member.userId === user._id ||
+        (member.workspaceId && workspaceId && member.workspaceId !== workspaceId)
+      ) {
+        return;
+      }
+      setOtherUsers((current) => {
+        const next = new Map(current);
+        next.set(member.userId, member);
+        return next;
+      });
+    };
+    const removeLocation = ({ userId }) => {
+      setOtherUsers((current) => {
+        const next = new Map(current);
+        next.delete(userId);
+        return next;
+      });
+    };
+    const handleLocationError = ({ message }) => {
+      setLocationError(message || "Workspace location sharing is unavailable.");
+    };
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
+    socket.on("connect", joinMap);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("other-users-location", handleLocations);
+    socket.on("user-location-updated", handleLocation);
+    socket.on("user-location-removed", removeLocation);
+    socket.on("location-error", handleLocationError);
+    if (socket.connected) joinMap();
 
-  if (!user) {
-    return <div>Please log in to access the map.</div>;
-  }
+    return () => {
+      stopSharing();
+      socket.emit("leave-location-workspace", { workspaceId });
+      socket.off("connect", joinMap);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("other-users-location", handleLocations);
+      socket.off("user-location-updated", handleLocation);
+      socket.off("user-location-removed", removeLocation);
+      socket.off("location-error", handleLocationError);
+    };
+  }, [stopSharing, user?._id, user?.token, workspaceId]);
+
+  if (!user) return null;
 
   return (
-    <div className="relative w-full h-screen">
-      <div className="absolute text-black top-5 left-16 z-[1000] backdrop-blur-md p-4 rounded-lg shadow-lg">
-        <h1 className="text-2xl font-bold mb-2">Real-Time Map</h1>
-        <div className="text-sm">Status: <span className={connectionStatus === 'connected' ? 'text-green-600' : 'text-red-600'}>{connectionStatus}</span></div>
-        {accuracy && <div className="text-sm">Current Accuracy: {Math.round(accuracy)} meters</div>}
-      </div>
+    <main className="location-page">
+      <section className="location-panel" aria-label="Workspace live map controls">
+        <div className="location-panel__header">
+          <button
+            type="button"
+            className="location-back"
+            aria-label="Back to workspace"
+            onClick={() =>
+              navigate(workspaceId ? `/workspace/${workspaceId}/chats` : "/workspace")
+            }
+          >
+            <FiArrowLeft />
+          </button>
+          <FiMapPin color="#34d399" size={24} />
+          <div className="location-panel__title">
+            <h1>Workspace live map</h1>
+            <p>{otherUsers.size + (location ? 1 : 0)} sharing location now</p>
+          </div>
+        </div>
+
+        <div className="location-status">
+          <span
+            className={`location-status__dot ${
+              connectionStatus === "connected"
+                ? "location-status__dot--connected"
+                : ""
+            }`}
+          />
+          {connectionStatus === "connected" ? "Live updates connected" : "Reconnecting"}
+          {location?.accuracy
+            ? ` - accuracy ${Math.round(location.accuracy)} m`
+            : ""}
+        </div>
+
+        <button
+          type="button"
+          className={`location-share ${isSharing ? "location-share--stop" : ""}`}
+          onClick={isSharing ? stopSharing : startSharing}
+        >
+          {isSharing ? "Stop sharing my location" : "Share my live location"}
+        </button>
+        <p className="location-note">
+          Only people currently sharing appear on this workspace map. Sharing stops
+          when you leave this page.
+        </p>
+        {locationError && <p className="location-error">{locationError}</p>}
+      </section>
+
       <MapComponent
         location={location}
-        accuracy={accuracy}
         otherUsers={Array.from(otherUsers.values())}
       />
-    </div>
+    </main>
   );
 };
 

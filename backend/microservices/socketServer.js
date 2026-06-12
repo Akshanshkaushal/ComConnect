@@ -13,6 +13,11 @@ const {
   getPresenceService,
   presenceTtlSeconds,
 } = require("../services/presenceService");
+const User = require("../models/userModel");
+const Workspace = require("../models/workspaceModel");
+
+const locationRoom = (workspaceId) => `workspace-location:${workspaceId}`;
+const publicLocation = ({ socketId, ...location }) => location;
 
 const createSocketServer = async (app) => {
   const server = http.createServer(app);
@@ -34,6 +39,7 @@ const createSocketServer = async (app) => {
   const presence = await getPresenceService();
   const serverId = process.env.SOCKET_SERVER_ID || os.hostname();
   const refreshIntervalMs = Math.max(10000, Math.floor(presenceTtlSeconds * 500));
+  const workspaceLocations = new Map();
 
   io.use((socket, next) => {
     const authorization = socket.handshake.headers.authorization;
@@ -52,8 +58,25 @@ const createSocketServer = async (app) => {
 
   io.on("connection", (socket) => {
     let heartbeat;
+    socket.data.locationWorkspaces = new Set();
+
+    const removeSharedLocation = (workspaceId) => {
+      const locations = workspaceLocations.get(workspaceId);
+      const current = locations?.get(socket.userId);
+      if (!current || current.socketId !== socket.id) return;
+
+      locations.delete(socket.userId);
+      if (!locations.size) workspaceLocations.delete(workspaceId);
+      io.to(locationRoom(workspaceId)).emit("user-location-removed", {
+        userId: socket.userId,
+        workspaceId,
+      });
+    };
 
     socket.on("setup", async () => {
+      if (heartbeat) {
+        return socket.emit("connected");
+      }
       socket.join(socket.userId);
       const state = await presence.register({
         userId: socket.userId,
@@ -83,8 +106,89 @@ const createSocketServer = async (app) => {
         }
       }
     });
+    socket.on("join-location-workspace", async ({ workspaceId } = {}) => {
+      if (!workspaceId) return;
+      try {
+        const [workspace, user] = await Promise.all([
+          Workspace.exists({ _id: workspaceId, users: socket.userId }),
+          User.findById(socket.userId).select("name pic"),
+        ]);
+        if (!workspace || !user) {
+          return socket.emit("location-error", {
+            message: "You do not have access to this workspace map",
+          });
+        }
+
+        socket.data.locationWorkspaces.add(workspaceId);
+        socket.data.locationUser = {
+          userName: user.name,
+          userPic: user.pic,
+        };
+        socket.join(locationRoom(workspaceId));
+        const locations = workspaceLocations.get(workspaceId);
+        socket.emit(
+          "other-users-location",
+          locations
+            ? [...locations.values()].map((location) =>
+                publicLocation(location)
+              )
+            : []
+        );
+      } catch (error) {
+        console.error("Location workspace join failed:", error.message);
+      }
+    });
+    socket.on("location-update", (payload = {}) => {
+      const workspaceId = payload.workspaceId?.toString();
+      const latitude = Number(payload.latitude);
+      const longitude = Number(payload.longitude);
+      const accuracy = Number(payload.accuracy);
+      if (
+        !workspaceId ||
+        !socket.data.locationWorkspaces.has(workspaceId) ||
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude) ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180
+      ) {
+        return;
+      }
+
+      const location = {
+        userId: socket.userId,
+        userName: socket.data.locationUser?.userName || "Workspace member",
+        userPic: socket.data.locationUser?.userPic,
+        workspaceId,
+        latitude,
+        longitude,
+        accuracy: Number.isFinite(accuracy) ? Math.max(0, accuracy) : null,
+        timestamp: Date.now(),
+        socketId: socket.id,
+      };
+      const locations = workspaceLocations.get(workspaceId) || new Map();
+      locations.set(socket.userId, location);
+      workspaceLocations.set(workspaceId, locations);
+      socket
+        .to(locationRoom(workspaceId))
+        .emit("user-location-updated", publicLocation(location));
+    });
+    socket.on("location-sharing-stopped", ({ workspaceId } = {}) => {
+      if (workspaceId) removeSharedLocation(workspaceId.toString());
+    });
+    socket.on("leave-location-workspace", ({ workspaceId } = {}) => {
+      if (!workspaceId) return;
+      const normalizedWorkspaceId = workspaceId.toString();
+      removeSharedLocation(normalizedWorkspaceId);
+      socket.data.locationWorkspaces.delete(normalizedWorkspaceId);
+      socket.leave(locationRoom(normalizedWorkspaceId));
+    });
     socket.on("disconnect", async () => {
       clearInterval(heartbeat);
+      for (const workspaceId of socket.data.locationWorkspaces) {
+        removeSharedLocation(workspaceId);
+      }
       try {
         const state = await presence.unregister(socket.id);
         if (state) io.emit("presence changed", state);

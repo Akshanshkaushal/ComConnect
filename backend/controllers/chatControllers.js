@@ -3,6 +3,49 @@ const Chat = require("../models/chatModel");
 const User = require("../models/userModel");
 const Workspace = require("../models/workspaceModel");
 
+const populateGroupChat = (chatId) =>
+  Chat.findById(chatId)
+    .populate("users", "-password")
+    .populate("groupAdmin", "-password");
+
+const requireGroupAdmin = async (chatId, requesterId) => {
+  const chat = await Chat.findById(chatId);
+
+  if (!chat || !chat.isGroupChat) {
+    const error = new Error("Group chat not found");
+    error.statusCode = 404;
+    throw error;
+  }
+  if (chat.groupAdmin?.toString() !== requesterId.toString()) {
+    const error = new Error("Only the group admin can perform this action");
+    error.statusCode = 403;
+    throw error;
+  }
+  return chat;
+};
+
+const addUsersToWorkspace = async (workspaceId, userIds, channelName) => {
+  if (!workspaceId || !userIds.length) return;
+
+  await Promise.all([
+    Workspace.updateOne(
+      { _id: workspaceId },
+      { $addToSet: { users: { $each: userIds } } }
+    ),
+    User.updateMany(
+      { _id: { $in: userIds } },
+      { $addToSet: { workspaces: workspaceId } }
+    ),
+  ]);
+
+  if (channelName) {
+    await Workspace.updateOne(
+      { _id: workspaceId, "roles.roleName": channelName },
+      { $addToSet: { "roles.$.users": { $each: userIds } } }
+    );
+  }
+};
+
 //@description     Create or fetch One to One Chat
 //@route           POST /api/chat/
 //@access          Protected
@@ -92,7 +135,15 @@ const createGroupChat = asyncHandler(async (req, res) => {
     return res.status(400).send({ message: "Please fill all the fields" });
   }
 
-  const users = JSON.parse(usersJSON);
+  let users;
+  try {
+    users = JSON.parse(usersJSON);
+  } catch {
+    return res.status(400).send({ message: "Invalid group member list" });
+  }
+  if (!Array.isArray(users)) {
+    return res.status(400).send({ message: "Invalid group member list" });
+  }
 
   if (users.length < 2) {
     return res
@@ -100,12 +151,32 @@ const createGroupChat = asyncHandler(async (req, res) => {
       .send("More than 2 users are required to form a group chat");
   }
 
-  users.push(req.user);
+  const memberIds = [
+    ...new Set([...users.map(String), req.user._id.toString()]),
+  ];
+
+  const workspace = await Workspace.findOne({
+    _id: workspaceId,
+    users: req.user._id,
+  });
+  if (!workspace) {
+    return res.status(403).send({
+      message: "You must belong to the workspace to create a group",
+    });
+  }
+  const existingMemberCount = await User.countDocuments({
+    _id: { $in: memberIds },
+  });
+  if (existingMemberCount !== memberIds.length) {
+    return res.status(400).send({
+      message: "One or more selected users no longer exist",
+    });
+  }
 
   try {
     const groupChat = await Chat.create({
       chatName: name,
-      users: users,
+      users: memberIds,
       isGroupChat: true,
       groupAdmin: req.user,
       workspace: workspaceId, // Associate group chat with the workspace
@@ -117,8 +188,9 @@ const createGroupChat = asyncHandler(async (req, res) => {
 
     // Update workspace with the new group chat
     await Workspace.findByIdAndUpdate(workspaceId, {
-      $push: { groups: groupChat._id }
+      $addToSet: { groups: groupChat._id }
     });
+    await addUsersToWorkspace(workspaceId, memberIds, name);
 
     res.status(200).json(fullGroupChat);
   } catch (error) {
@@ -132,13 +204,11 @@ const createGroupChat = asyncHandler(async (req, res) => {
 // @access  Protected
 const renameGroup = asyncHandler(async (req, res) => {
   const { chatId, chatName } = req.body;
-
-  // Find the chat by ID
-  const chat = await Chat.findById(chatId);
-
-  if (!chat) {
-    res.status(404);
-    throw new Error("Chat Not Found");
+  const normalizedName = chatName?.trim();
+  const chat = await requireGroupAdmin(chatId, req.user._id);
+  if (!normalizedName) {
+    res.status(400);
+    throw new Error("Group name is required");
   }
 
   // Check if the chat is a predefined group
@@ -149,13 +219,9 @@ const renameGroup = asyncHandler(async (req, res) => {
   }
 
   // Update the chat name
-  chat.chatName = chatName;
-  const updatedChat = await chat.save();
-
-  // Populate the necessary fields
-  await updatedChat.populate("users", "-password").populate("groupAdmin", "-password").execPopulate();
-
-  res.json(updatedChat);
+  chat.chatName = normalizedName;
+  await chat.save();
+  res.json(await populateGroupChat(chat._id));
 });
 
 // @desc    Remove user from Group
@@ -163,19 +229,23 @@ const renameGroup = asyncHandler(async (req, res) => {
 // @access  Protected
 const removeFromGroup = asyncHandler(async (req, res) => {
   const { chatId, userId } = req.body;
-
-  // Find the chat by ID
   const chat = await Chat.findById(chatId);
 
-  if (!chat) {
+  if (!chat || !chat.isGroupChat) {
     res.status(404);
-    throw new Error("Chat Not Found");
+    throw new Error("Group chat not found");
   }
 
-  // Check if the requester is admin
-  if (chat.groupAdmin.toString() !== req.user._id.toString()) {
+  const requesterIsAdmin =
+    chat.groupAdmin?.toString() === req.user._id.toString();
+  const requesterIsLeaving = userId === req.user._id.toString();
+  if (!requesterIsAdmin && !requesterIsLeaving) {
     res.status(403);
     throw new Error("Only admins can remove users from the group");
+  }
+  if (chat.groupAdmin?.toString() === userId) {
+    res.status(400);
+    throw new Error("Transfer group admin before the current admin leaves");
   }
 
   const removed = await Chat.findByIdAndUpdate(
@@ -203,27 +273,41 @@ const removeFromGroup = asyncHandler(async (req, res) => {
 // @access  Protected
 const addToGroup = asyncHandler(async (req, res) => {
   const { chatId, userId } = req.body;
-
-  // check if the requester is admin
-
-  const added = await Chat.findByIdAndUpdate(
-    chatId,
-    {
-      $push: { users: userId },
-    },
-    {
-      new: true,
-    }
-  )
-    .populate("users", "-password")
-    .populate("groupAdmin", "-password");
-
-  if (!added) {
+  const chat = await requireGroupAdmin(chatId, req.user._id);
+  const member = await User.findById(userId).select("_id");
+  if (!member) {
     res.status(404);
-    throw new Error("Chat Not Found");
-  } else {
-    res.json(added);
+    throw new Error("User not found");
   }
+
+  await Chat.updateOne(
+    { _id: chat._id },
+    { $addToSet: { users: member._id } }
+  );
+  await addUsersToWorkspace(
+    chat.workspace,
+    [member._id],
+    chat.chatName
+  );
+
+  res.json(await populateGroupChat(chat._id));
+});
+
+// @desc    Transfer group admin ownership
+// @route   PATCH /api/chat/groupadmin
+// @access  Protected
+const transferGroupAdmin = asyncHandler(async (req, res) => {
+  const { chatId, userId } = req.body;
+  const chat = await requireGroupAdmin(chatId, req.user._id);
+
+  if (!chat.users.some((memberId) => memberId.toString() === userId)) {
+    res.status(400);
+    throw new Error("The new admin must already belong to the group");
+  }
+
+  chat.groupAdmin = userId;
+  await chat.save();
+  res.json(await populateGroupChat(chat._id));
 });
 
 const deleteAllChats = asyncHandler(async (req, res) => {
@@ -242,5 +326,6 @@ module.exports = {
   renameGroup,
   addToGroup,
   removeFromGroup,
+  transferGroupAdmin,
   deleteAllChats
 };

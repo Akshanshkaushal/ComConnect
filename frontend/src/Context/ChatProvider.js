@@ -53,10 +53,7 @@ const ChatProvider = ({ children }) => {
     const initializeNotifications = async () => {
       try {
         const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-        const registration = await navigator.serviceWorker.register(
-          "/firebase-messaging-sw.js"
-        );
-        await navigator.serviceWorker.ready;
+        const registration = await navigator.serviceWorker.ready;
         const messaging = getMessaging(app);
         const token = await getToken(messaging, {
           vapidKey:

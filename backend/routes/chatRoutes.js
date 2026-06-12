@@ -6,6 +6,7 @@ const {
   removeFromGroup,
   addToGroup,
   renameGroup,
+  transferGroupAdmin,
 } = require("../controllers/chatControllers");
 const { protect } = require("../middleware/authMiddleware");
 const {
@@ -20,8 +21,12 @@ router.post("/presence", protect, getUsersPresence);
 router.get("/presence/:userId", protect, getUserPresence);
 router.get('/workspace/:workspaceId/chats',protect, fetchChats);
 router.route("/group").post(protect, createGroupChat);
-router.route("/rename").put(protect, renameGroup);
-router.route("/groupremove").put(protect, removeFromGroup);
-router.route("/groupadd").put(protect, addToGroup);
+router.route("/rename").put(protect, renameGroup).patch(protect, renameGroup);
+router
+  .route("/groupremove")
+  .put(protect, removeFromGroup)
+  .patch(protect, removeFromGroup);
+router.route("/groupadd").put(protect, addToGroup).patch(protect, addToGroup);
+router.route("/groupadmin").patch(protect, transferGroupAdmin);
 
 module.exports = router;

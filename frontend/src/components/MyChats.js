@@ -109,7 +109,7 @@ const MyChats = ({ fetchAgain }) => {
               size="sm"
               variant="ghost"
               color="#bdc8c3"
-              onClick={() => navigate("/geo-location")}
+              onClick={() => navigate(`/workspace/${workspaceId}/map`)}
             >
               Map
             </Button>

@@ -436,12 +436,13 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
   };
 
   return (
-    <Box display="flex" height="100vh" w="100%">
+    <Box display="flex" height="100dvh" w="100%" minW={0} maxW="100vw" overflow="hidden">
       {/* Chat area fills remaining space */}
-      <Box flex={1} height="100vh">
+      <Box flex={1} minW={0} height="100dvh" position="relative" overflow="hidden">
         {selectedChat ? (
           <Box d="flex" flexDir="column" bg="#101414" w="100%" height="100dvh">
             <Box
+              className="chat-header"
               bg="#171c1b"
               display="flex"
               flexDirection="row"
@@ -464,7 +465,9 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
                 flexShrink={0}
               />
               <Box
+                className="chat-header-title"
                 flex="1"
+                minW={0}
                 display="flex"
                 alignItems="center"
                 color="#fff"
@@ -502,15 +505,18 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
                   ))}
               </Box>
               <Box
+                className="chat-header-actions"
                 display="flex"
                 justifyContent="space-between"
                 alignItems="center"
-                gap={3}
+                gap={{ base: 1, md: 3 }}
               >
-                <Box display="flex" alignItems="center" gap={2}>
-                  {selectedChat.isGroupChat && (
-                    <ChatSummaryButton chatId={selectedChat._id} />
-                  )}
+                <Box display="flex" alignItems="center" gap={{ base: 1, md: 2 }}>
+                  <Box display={{ base: "none", sm: "block" }}>
+                    {selectedChat.isGroupChat && (
+                      <ChatSummaryButton chatId={selectedChat._id} />
+                    )}
+                  </Box>
                   <Box position="relative">
                     {/* Search Button/Input - Expands when clicked */}
                     <Box
@@ -521,7 +527,14 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
                       border="1px solid #3a4541"
                       _hover={{ bg: "#2c3532" }}
                       transition="all 0.2s ease-in-out"
-                      width={isSearchOpen ? "300px" : "auto"}
+                      width={{
+                        base: isSearchOpen ? "min(260px, calc(100vw - 20px))" : "34px",
+                        md: isSearchOpen ? "300px" : "auto",
+                      }}
+                      position={{ base: isSearchOpen ? "fixed" : "relative", md: "relative" }}
+                      top={{ base: isSearchOpen ? "10px" : "auto", md: "auto" }}
+                      right={{ base: isSearchOpen ? "10px" : "auto", md: "auto" }}
+                      zIndex={isSearchOpen ? 1400 : "auto"}
                       p={isSearchOpen ? "0px 0px" : "0"}
                       pr={isSearchOpen ? 2 : 0}
                     >
@@ -662,7 +675,10 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
                   </Box>
 
                   <Button
-                    p={3}
+                    p={{ base: 0, md: 3 }}
+                    minW={{ base: "34px", md: "auto" }}
+                    w={{ base: "34px", md: "auto" }}
+                    h={{ base: "34px", md: "auto" }}
                     bg="#202725"
                     borderRadius="6px"
                     border="1px solid #3a4541"
@@ -686,8 +702,11 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
 
                   <Menu>
                     <MenuButton
-                      p={3}
-                      borderRadius="12px"
+                      p={{ base: 0, md: 3 }}
+                      minW={{ base: "34px", md: "auto" }}
+                      w={{ base: "34px", md: "auto" }}
+                      h={{ base: "34px", md: "auto" }}
+                      borderRadius="6px"
                       display="flex"
                       alignItems="center"
                       alignContent={"center"}
@@ -757,8 +776,9 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
                       _hover={{ bg: "#2c3532" }}
                       _active={{ bg: "#2c3532" }}
                       borderRadius="100%"
-                      w={"45px"}
-                      h={"45px"}
+                      minW={{ base: "34px", md: "45px" }}
+                      w={{ base: "34px", md: "45px" }}
+                      h={{ base: "34px", md: "45px" }}
                       display={"flex"}
                       alignItems={"center"}
                       justifyContent={"center"}
@@ -817,9 +837,10 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
                 <Box
                   scrollBehavior={"smooth"}
                   overflowY={"auto"}
+                  overflowX="hidden"
                   flex="1"
-                  minHeight="100%"
-                  pb="90px"
+                  minHeight={0}
+                  pb={{ base: "76px", md: "90px" }}
                   sx={{
                     // Custom scrollbar styling for webkit browsers
                     "&::-webkit-scrollbar": {
@@ -859,6 +880,7 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
               )}
 
               <FormControl
+                className="chat-composer"
                 onKeyDown={sendMessage}
                 id="first-name"
                 isRequired
@@ -874,16 +896,11 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
                 zIndex={10}
               >
                 {istyping ? <div>typing...</div> : <></>}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    width: "100%",
-                    height: "100%",
-                  }}
-                >
+                <div className="chat-composer-row">
                   <Input
-                    width="90%"
+                    flex="1"
+                    minW={0}
+                    width="auto"
                     variant="filled"
                     bg="#202725"
                     borderColor="#3a4541"
@@ -899,9 +916,12 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
                     value={newMessage}
                     onChange={typingHandler}
                     className="enteramsg"
+                    m={0}
                   />
                   <Button
                     ml={2}
+                    flexShrink={0}
+                    minW={{ base: "42px", md: "48px" }}
                     bg="#34d399"
                     color="#07120e"
                     _hover={{ bg: "#6ee7b7" }}

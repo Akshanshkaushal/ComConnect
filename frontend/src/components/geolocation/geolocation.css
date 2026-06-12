@@ -1,0 +1,159 @@
+.location-page {
+  position: relative;
+  width: 100%;
+  max-width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background: #101414;
+}
+
+.location-map {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.location-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 1000;
+  width: min(360px, calc(100vw - 32px));
+  padding: 16px;
+  color: #eef4f1;
+  background: rgba(23, 28, 27, 0.94);
+  border: 1px solid #3a4541;
+  border-radius: 10px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
+}
+
+.location-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.location-panel__title {
+  min-width: 0;
+  flex: 1;
+}
+
+.location-panel__title h1,
+.location-panel__title p {
+  margin: 0;
+}
+
+.location-panel__title h1 {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.location-panel__title p {
+  margin-top: 3px;
+  color: #9eaaa5;
+  font-size: 12px;
+}
+
+.location-back,
+.location-share {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border: 1px solid #3a4541;
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.location-back {
+  width: 38px;
+  flex: 0 0 38px;
+  color: #dce6e1;
+  background: #202725;
+}
+
+.location-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  color: #bdc8c3;
+  font-size: 13px;
+}
+
+.location-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f87171;
+}
+
+.location-status__dot--connected {
+  background: #34d399;
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.12);
+}
+
+.location-share {
+  width: 100%;
+  margin-top: 14px;
+  padding: 9px 12px;
+  color: #07120e;
+  font-weight: 750;
+  background: #34d399;
+  border-color: #34d399;
+}
+
+.location-share--stop {
+  color: #eef4f1;
+  background: #2c3532;
+  border-color: #52615b;
+}
+
+.location-note,
+.location-error {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.location-note {
+  color: #8f9d97;
+}
+
+.location-error {
+  color: #fca5a5;
+}
+
+.location-marker {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: #07120e;
+  font-size: 12px;
+  font-weight: 800;
+  background: #6ee7b7;
+  border: 3px solid #eef4f1;
+  border-radius: 50% 50% 50% 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  transform: rotate(-45deg);
+}
+
+.location-marker span {
+  transform: rotate(45deg);
+}
+
+.location-marker--self {
+  background: #34d399;
+}
+
+@media (max-width: 640px) {
+  .location-panel {
+    top: 8px;
+    left: 8px;
+    width: calc(100vw - 16px);
+    padding: 12px;
+  }
+}
