@@ -23,6 +23,10 @@ health check, logs, scaling policy, and release artifact. The Node services
 currently share one MongoDB cluster, but each service owns a bounded API and can
 be scaled or deployed separately.
 
+On AWS, every service has its own ECR repository, ECS task definition, desired
+count, maximum count, and CPU target-tracking policy. Chat and message workers
+can therefore scale independently from identity, tasks, notifications, and AI.
+
 ## 2. Complete System Diagram
 
 ```mermaid

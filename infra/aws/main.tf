@@ -423,7 +423,11 @@ resource "aws_ecs_service" "service" {
   name            = each.key
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.service[each.key].arn
-  desired_count   = var.desired_count
+  desired_count = lookup(
+    var.service_desired_counts,
+    each.key,
+    var.desired_count
+  )
   launch_type     = "FARGATE"
 
   deployment_minimum_healthy_percent = 50
@@ -450,6 +454,48 @@ resource "aws_ecs_service" "service" {
   }
 
   depends_on = [aws_lb_listener.http]
+}
+
+resource "aws_appautoscaling_target" "ecs" {
+  for_each = local.services
+
+  max_capacity = lookup(
+    var.service_max_counts,
+    each.key,
+    lookup(var.service_desired_counts, each.key, var.desired_count)
+  )
+  min_capacity = lookup(
+    var.service_desired_counts,
+    each.key,
+    var.desired_count
+  )
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.service[each.key].name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "cpu" {
+  for_each = {
+    for name, service in local.services : name => service
+    if lookup(var.service_max_counts, name, 1) >
+    lookup(var.service_desired_counts, name, var.desired_count)
+  }
+
+  name               = "${local.name}-${each.key}-cpu"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs[each.key].resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs[each.key].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs[each.key].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value       = 65
+    scale_in_cooldown  = 120
+    scale_out_cooldown = 60
+
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+  }
 }
 
 resource "aws_s3_bucket" "frontend" {

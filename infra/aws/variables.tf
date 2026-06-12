@@ -17,9 +17,39 @@ variable "image_tag" {
 }
 
 variable "desired_count" {
-  description = "Desired task count for each service."
+  description = "Fallback desired task count for services not listed in service_desired_counts."
   type        = number
   default     = 1
+}
+
+variable "service_desired_counts" {
+  description = "Independent desired ECS task count per service."
+  type        = map(number)
+  default = {
+    gateway         = 2
+    identity        = 1
+    chat            = 2
+    message-worker  = 2
+    tasks           = 1
+    notifications   = 1
+    ai-orchestrator = 1
+    ai-engine       = 1
+  }
+}
+
+variable "service_max_counts" {
+  description = "Independent ECS autoscaling ceiling per service."
+  type        = map(number)
+  default = {
+    gateway         = 6
+    identity        = 3
+    chat            = 8
+    message-worker  = 8
+    tasks           = 4
+    notifications   = 4
+    ai-orchestrator = 4
+    ai-engine       = 1
+  }
 }
 
 variable "mongo_uri" {

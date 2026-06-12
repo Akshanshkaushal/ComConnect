@@ -42,6 +42,10 @@ https://<render-gateway>.onrender.com/health
 
 Import the repository into Vercel. `vercel.json` builds `frontend`.
 
+The install is deterministic: `npm ci --prefix frontend` uses the committed
+frontend lockfile. `react-split-pane` is no longer a dependency. If a previous
+deployment still reports it, redeploy once with the Vercel build cache cleared.
+
 Set:
 
 ```text
@@ -77,6 +81,11 @@ Terraform creates:
 - CloudWatch logs
 - private S3 frontend bucket
 - CloudFront distribution routing frontend and API traffic
+
+Every deployable service has its own ECR repository and ECS task definition.
+`service_desired_counts` and `service_max_counts` configure services
+independently, and target-tracking CPU policies scale eligible services without
+scaling the rest of the application.
 
 ### Prerequisites
 
