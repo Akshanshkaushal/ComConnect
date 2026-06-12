@@ -15,6 +15,7 @@ import { useNavigate } from "react-router-dom";
 import { useWorkspace } from "../../Context/WorkspaceProvider";
 import CreateWorkspaceModal from "./CreateWorkspaceModal";
 import JoinWorkspaceModal from "./JoinWorkspaceModal";
+import BrandMark from "../brand/BrandMark";
 
 const WorkspaceSelection = () => {
   const { userWorkspaces, user } = useWorkspace();
@@ -36,18 +37,7 @@ const WorkspaceSelection = () => {
         borderBottom="1px solid #313b37"
       >
         <HStack spacing={3}>
-          <Flex
-            w="34px"
-            h="34px"
-            align="center"
-            justify="center"
-            bg="#34d399"
-            color="#07120e"
-            borderRadius="6px"
-            fontWeight="800"
-          >
-            C
-          </Flex>
+          <BrandMark size="38px" />
           <Box>
             <Text fontWeight="750">ComConnect</Text>
             <Text color="#8f9d97" fontSize="xs">Workspace directory</Text>

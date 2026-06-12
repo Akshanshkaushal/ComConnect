@@ -15,6 +15,7 @@ import {
   Flex,
 } from "@chakra-ui/react";
 import { Box } from "@chakra-ui/layout";
+import BrandMark from "../brand/BrandMark";
 
 const ProfileModal = ({ user, children }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -56,23 +57,15 @@ const ProfileModal = ({ user, children }) => {
                   src={user.pic}
                   alt={user.name}
                 />
-                <Flex
+                <Box
                   position="absolute"
                   right="4px"
                   bottom="4px"
-                  w="24px"
-                  h="24px"
-                  align="center"
-                  justify="center"
                   borderRadius="full"
-                  bg="#34d399"
-                  color="#07120e"
                   border="3px solid #171c1b"
-                  fontSize="10px"
-                  fontWeight="800"
                 >
-                  C
-                </Flex>
+                  <BrandMark size="24px" borderRadius="full" boxShadow="none" />
+                </Box>
               </Box>
               <Box textAlign={{ base: "center", sm: "left" }} minW={0}>
                 <Badge bg="#26332e" color="#6ee7b7" mb={2}>

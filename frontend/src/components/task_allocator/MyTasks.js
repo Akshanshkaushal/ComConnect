@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { ChatState } from "../../Context/ChatProvider";
 import { API_URL } from "../../config/api.config";
 import TaskCard from "./TaskCard";
+import BrandMark from "../brand/BrandMark";
 
 const MyTasks = () => {
   const { user } = ChatState();
@@ -60,9 +61,7 @@ const MyTasks = () => {
         bg="#141918"
       >
         <HStack spacing={3}>
-          <Flex w="34px" h="34px" align="center" justify="center" bg="#34d399" color="#07120e" fontWeight="800">
-            C
-          </Flex>
+          <BrandMark size="38px" />
           <Box>
             <Text fontWeight="750">All my tasks</Text>
             <Text color="#8f9d97" fontSize="xs">Assigned work across ComConnect</Text>

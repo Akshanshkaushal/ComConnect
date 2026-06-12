@@ -18,6 +18,7 @@ import ChatLoading from "./ChatLoading";
 import GroupChatModal from "./miscellaneous/GroupChatModal";
 import WorkspaceAssistant from "./ai/WorkspaceAssistant";
 import WorkspaceSearch from "./workspace/WorkspaceSearch";
+import BrandMark from "./brand/BrandMark";
 
 const MyChats = ({ fetchAgain }) => {
   const [loggedUser, setLoggedUser] = useState();
@@ -63,18 +64,7 @@ const MyChats = ({ fetchAgain }) => {
     <Flex direction="column" h="100dvh" bg="#171c1b" color="#eef4f1">
       <Box px={5} pt={5} pb={4} borderBottom="1px solid #313b37">
         <Flex align="center" gap={3}>
-          <Flex
-            w="36px"
-            h="36px"
-            align="center"
-            justify="center"
-            bg="#34d399"
-            color="#07120e"
-            borderRadius="6px"
-            fontWeight="800"
-          >
-            C
-          </Flex>
+          <BrandMark size="38px" />
           <Box minW={0}>
             <Text fontWeight="750" fontSize="lg" lineHeight="1.1">
               ComConnect

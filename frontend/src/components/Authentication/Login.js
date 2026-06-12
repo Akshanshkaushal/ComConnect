@@ -1,8 +1,6 @@
 import {
   Box,
   Button,
-  Divider,
-  Flex,
   FormControl,
   FormLabel,
   IconButton,
@@ -18,8 +16,6 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { ChatState } from "../../Context/ChatProvider";
 import { API_URL } from "../../config/api.config";
-import GoogleLoginButton from "./loginwithgoogle";
-import RememberMe from "./remember";
 
 const inputStyles = {
   bg: "#171c1b",
@@ -108,7 +104,6 @@ const Login = () => {
               />
             </InputRightElement>
           </InputGroup>
-          <RememberMe />
         </FormControl>
         <Button
           type="submit"
@@ -120,12 +115,6 @@ const Login = () => {
         >
           Sign in
         </Button>
-        <Flex align="center" gap={3} color="#697670">
-          <Divider borderColor="#313b37" />
-          <Box fontSize="xs">OR</Box>
-          <Divider borderColor="#313b37" />
-        </Flex>
-        <GoogleLoginButton />
       </VStack>
     </Box>
   );

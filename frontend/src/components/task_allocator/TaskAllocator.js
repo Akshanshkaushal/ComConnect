@@ -29,6 +29,7 @@ import { useNavigate } from "react-router-dom";
 import { ChatState } from "../../Context/ChatProvider";
 import { API_URL } from "../../config/api.config";
 import StatusPanel from "./StatusPanel";
+import BrandMark from "../brand/BrandMark";
 
 const fieldStyles = {
   bg: "#171c1b",
@@ -190,19 +191,7 @@ const TaskAllocator = ({ workspaceId }) => {
         bg="#141918"
       >
         <HStack spacing={3} minW={0}>
-          <Flex
-            w="34px"
-            h="34px"
-            flex="0 0 auto"
-            align="center"
-            justify="center"
-            borderRadius="6px"
-            bg="#34d399"
-            color="#07120e"
-            fontWeight="800"
-          >
-            C
-          </Flex>
+          <BrandMark size="38px" />
           <Box minW={0}>
             <Text fontWeight="750" lineHeight="1.2">Workspace tasks</Text>
             <Text color="#8f9d97" fontSize="xs" noOfLines={1}>

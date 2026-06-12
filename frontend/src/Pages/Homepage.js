@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Login from "../components/Authentication/Login";
 import Signup from "../components/Authentication/Signup";
+import BrandMark from "../components/brand/BrandMark";
 
 function Homepage() {
   const navigate = useNavigate();
@@ -15,7 +16,36 @@ function Homepage() {
   }, [navigate]);
 
   return (
-    <Flex minH="100dvh" bg="#101414" direction="column">
+    <Flex
+      minH="100dvh"
+      bg="#101414"
+      direction="column"
+      position="relative"
+      overflow="hidden"
+      _before={{
+        content: '""',
+        position: "absolute",
+        width: "520px",
+        height: "520px",
+        top: "-260px",
+        right: "-160px",
+        borderRadius: "full",
+        background: "rgba(52, 211, 153, 0.09)",
+        filter: "blur(10px)",
+        pointerEvents: "none",
+      }}
+      _after={{
+        content: '""',
+        position: "absolute",
+        width: "420px",
+        height: "420px",
+        bottom: "-260px",
+        left: "-180px",
+        borderRadius: "full",
+        background: "rgba(16, 185, 129, 0.07)",
+        pointerEvents: "none",
+      }}
+    >
       <Flex
         as="header"
         h="68px"
@@ -23,31 +53,39 @@ function Homepage() {
         align="center"
         justify="space-between"
         borderBottom="1px solid #313b37"
+        bg="rgba(16, 20, 20, 0.86)"
+        backdropFilter="blur(12px)"
+        position="relative"
+        zIndex={1}
       >
         <HStack spacing={3}>
-          <Flex
-            w="34px"
-            h="34px"
-            align="center"
-            justify="center"
-            borderRadius="6px"
-            bg="#34d399"
-            color="#07120e"
-            fontWeight="800"
-          >
-            C
-          </Flex>
-          <Text fontWeight="750" fontSize="lg">
-            ComConnect
-          </Text>
+          <BrandMark size="38px" />
+          <Box>
+            <Text fontWeight="800" fontSize="lg" lineHeight="1">
+              ComConnect
+            </Text>
+            <Text color="#6ee7b7" fontSize="10px" mt={1} letterSpacing="0.08em">
+              WORK TOGETHER
+            </Text>
+          </Box>
         </HStack>
         <Text display={{ base: "none", md: "block" }} color="#8f9d97" fontSize="sm">
           Events, conversations, and tasks in one workspace
         </Text>
       </Flex>
 
-      <Flex flex="1" align="center" justify="center" px={4} py={10}>
-        <Box w="100%" maxW="460px">
+      <Flex flex="1" align="center" justify="center" px={4} py={10} position="relative" zIndex={1}>
+        <Box
+          w="100%"
+          maxW="470px"
+          p={{ base: 5, md: 7 }}
+          bg="rgba(23, 28, 27, 0.94)"
+          border="1px solid #313b37"
+          borderTop="2px solid #34d399"
+          borderRadius="10px"
+          boxShadow="0 24px 70px rgba(0, 0, 0, 0.32)"
+        >
+          <BrandMark size="48px" mb={5} />
           <Text fontSize="2xl" fontWeight="750">
             {mode === "login" ? "Welcome back" : "Create your account"}
           </Text>

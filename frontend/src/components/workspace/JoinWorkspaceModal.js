@@ -137,11 +137,11 @@ const JoinWorkspaceModal = ({ children }) => {
                   borderColor="#3a4541"
                   color="white"
                   _placeholder={{ color: "gray.400" }}
-                  _hover={{ borderColor: "#2982db40" }}
+                  _hover={{ borderColor: "#52615b" }}
                   _focus={{
-                    borderColor: "#21364A",
-                    boxShadow: "0 0 0 1px #21364A",
-                    bg: "#131f2bff",
+                    borderColor: "#34d399",
+                    boxShadow: "0 0 0 1px #34d399",
+                    bg: "#202725",
                   }}
                 />
               </FormControl>
@@ -156,11 +156,11 @@ const JoinWorkspaceModal = ({ children }) => {
                   borderColor="#3a4541"
                   color="white"
                   _placeholder={{ color: "gray.400" }}
-                  _hover={{ borderColor: "#2982db40" }}
+                  _hover={{ borderColor: "#52615b" }}
                   _focus={{
-                    borderColor: "#21364A",
-                    boxShadow: "0 0 0 1px #21364A",
-                    bg: "#131f2bff",
+                    borderColor: "#34d399",
+                    boxShadow: "0 0 0 1px #34d399",
+                    bg: "#202725",
                   }}
                 />
               </FormControl>
