@@ -66,11 +66,23 @@ const TaskAllocator = ({ workspaceId }) => {
     if (!user?.token || !workspaceId) return;
     setLoading(true);
     try {
-      const { data } = await axios.get(
-        `${API_URL}/tasks/workspace/${workspaceId}`,
-        config
+      const [assignedResponse, allocatedResponse] = await Promise.all([
+        axios.get(
+          `${API_URL}/tasks/my-tasks?workspaceId=${workspaceId}`,
+          config
+        ),
+        axios.get(
+          `${API_URL}/tasks/allocated-tasks?workspaceId=${workspaceId}`,
+          config
+        ),
+      ]);
+      const workspaceTasks = new Map(
+        [...assignedResponse.data, ...allocatedResponse.data].map((task) => [
+          task._id,
+          task,
+        ])
       );
-      setTasks(data);
+      setTasks([...workspaceTasks.values()]);
     } catch (error) {
       toast({
         title: "Tasks could not be loaded",
